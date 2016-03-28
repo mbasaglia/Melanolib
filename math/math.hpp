@@ -26,30 +26,7 @@
 
 namespace melanolib {
 
-/**
- * \brief Namespace for math utilities
- */
 namespace math {
-
-/**
- * \brief Get a uniform random integer
- */
-long random();
-
-/**
- * \brief Get a uniform random integer between 0 and \c max (inclusive)
- */
-long random(long max);
-
-/**
- * \brief Get a uniform random integer between \c min and \c max (inclusive)
- */
-long random(long min, long max);
-
-/**
- * \brief Get a uniform random number between 0 and 1
- */
-double random_real();
 
 /**
  * \brief Truncates a number

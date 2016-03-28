@@ -18,8 +18,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef MELANOLIB_UTILS_HPP
-#define MELANOLIB_UTILS_HPP
+#ifndef MELANOLIB_TYPE_UTILS_HPP
+#define MELANOLIB_TYPE_UTILS_HPP
 
 #include <iosfwd>
 #include <tuple>
@@ -110,4 +110,4 @@ template<class T>
     {};
 
 } // namespace melanolib
-#endif // MELANOLIB_UTILS_HPP
+#endif // MELANOLIB_TYPE_UTILS_HPP
