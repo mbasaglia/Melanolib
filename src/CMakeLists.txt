@@ -13,4 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-add_library(melanolib_library library.cpp)
+add_subdirectory(math)
+add_subdirectory(string)
+add_subdirectory(time)
+add_subdirectory(library)

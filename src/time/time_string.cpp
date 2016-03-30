@@ -18,7 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "time_string.hpp"
+#include "melanolib/time/time_string.hpp"
 
 #include "melanolib/string/stringutils.hpp"
 #include "melanolib/string/language.hpp"

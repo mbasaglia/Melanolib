@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "melanolib/library.hpp"
+#include "melanolib/library/library.hpp"
 
 #if __has_include(<dlfcn.h>)
 #include <dlfcn.h>

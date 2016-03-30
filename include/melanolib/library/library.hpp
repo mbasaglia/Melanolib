@@ -25,7 +25,7 @@
 #include <stdexcept>
 #include <memory>
 
-#include "melanolib/utils.hpp"
+#include "melanolib/utils/utils.hpp"
 
 namespace melanolib {
 namespace library {

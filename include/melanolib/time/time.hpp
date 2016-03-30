@@ -29,9 +29,9 @@
 #include <condition_variable>
 #include <thread>
 
-#include "melanolib/functional.hpp"
-#include "melanolib/c++-compat.hpp"
-#include "melanolib/math.hpp"
+#include "melanolib/utils/functional.hpp"
+#include "melanolib/utils/c++-compat.hpp"
+#include "melanolib/math/math.hpp"
 
 namespace melanolib {
 /**
