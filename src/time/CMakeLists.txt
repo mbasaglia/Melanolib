@@ -14,4 +14,4 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 add_library(melano_time time.cpp time_string.cpp)
-target_link_libraries(melano_time melano_string)
+target_link_libraries(melano_time melano_stringutils)

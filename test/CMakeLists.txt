@@ -27,9 +27,7 @@ if (ENABLE_TESTS)
     endfunction(test_target)
 
     test_target(test_string melano_stringutils)
-    test_target(test_time melano_stringutils melano_time)
-    test_target(test_time melano_stringutils melano_time)
-
+    test_target(test_time melano_time)
 
     # Coverage
     add_custom_target(test_all
