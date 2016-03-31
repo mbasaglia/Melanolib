@@ -29,17 +29,25 @@
 #endif
 
 #ifdef __has_include
+#   define MELANOLIB_HAS_INCLUDE(x) __has_include(x)
+#else
+#   define define MELANOLIB_HAS_INCLUDE(x) false
+#endif
+
 // optional
-/*#if __has_include(<optional>)
+#if MELANOLIB_HAS_INCLUDE(<optional>) && !defined(MELANOLIB_BOOST_OPTIONAL)
 #    include<optional>
-    template<class T>
-        using melanolib::Optional = std::optional<T>;
-#  elif __has_include(<experimental/optional>)
+    namespace melanolib {
+        template<class T>
+            using Optional = std::optional<T>;
+    } // namespace melanolib
+#  elif MELANOLIB_HAS_INCLUDE(<experimental/optional>) && !defined(MELANOLIB_BOOST_OPTIONAL)
 #    include <experimental/optional>
-    template<class T>
-        using melanolib::Optional = std::experimental::optional<T>;
-#  elif __has_include(<boost/optional.hpp>)*/
-#  if __has_include(<boost/optional.hpp>)
+    namespace melanolib {
+        template<class T>
+            using Optional = std::experimental::optional<T>;
+    } // namespace melanolib
+#  elif MELANOLIB_HAS_INCLUDE(<boost/optional.hpp>) || defined(MELANOLIB_BOOST_OPTIONAL)
 #    include <boost/optional.hpp>
     namespace melanolib {
         template<class T>
@@ -48,24 +56,38 @@
 #  else
 #     error "Missing <optional>"
 #  endif
+
 // any
-#if __has_include(<any>)
+#if MELANOLIB_HAS_INCLUDE(<any>) && !defined(MELANOLIB_BOOST_ANY)
 #    include<any>
     namespace melanolib {
         using Any = std::any;
+        template<class T, class Arg>
+            auto any_cast(Arg&& arg) {
+                return std::any_cast<T>(std::forward<Arg>(arg));
+            }
     } // namespace melanolib
-// #  elif __has_include(<experimental/any>)
-// #    include <experimental/any>
-//     using Any = std::experimental::any;
-#  elif __has_include(<boost/any.hpp>)
+#  elif __has_include(<experimental/any>) && !defined(MELANOLIB_BOOST_ANY)
+#    include <experimental/any>
+    namespace melanolib {
+        using Any = std::experimental::any;
+        template<class T, class Arg>
+            auto any_cast(Arg&& arg) {
+                return std::experimental::any_cast<T>(std::forward<Arg>(arg));
+            }
+    } // namespace melanolib
+#  elif MELANOLIB_HAS_INCLUDE(<boost/any.hpp>) || defined(MELANOLIB_BOOST_ANY)
 #    include <boost/any.hpp>
     namespace melanolib {
         using Any = boost::any;
+        template<class T, class Arg>
+            auto any_cast(Arg&& arg) {
+                return boost::any_cast<T>(std::forward<Arg>(arg));
+            }
     } // namespace melanolib
 #  else
 #     error "Missing <any>"
 #  endif
-#endif // __has_include
 
 #include <memory>
 

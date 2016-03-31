@@ -13,4 +13,4 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-add_library(melanolib_random random.cpp)
+add_library(melano_random random.cpp)

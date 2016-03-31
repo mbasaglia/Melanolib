@@ -165,7 +165,7 @@ private:
         };
         Type            type{INVALID};  ///< Token type
         std::string     lexeme;         ///< Corresponding string
-        boost::any      value;          ///< Associated value
+        Any             value;          ///< Associated value
 
         Token(){};
 
@@ -379,7 +379,7 @@ private:
     template<class T>
         T token_val()
         {
-            return boost::any_cast<T>(lookahead.value);
+            return melanolib::any_cast<T>(lookahead.value);
         }
     /**
      * \brief Convert any duration type into \c Duration

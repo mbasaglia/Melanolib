@@ -13,5 +13,5 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-add_library(melanolib_time time.cpp time_string.cpp)
-target_link_libraries(melanolib_time melanolib_string)
+add_library(melano_time time.cpp time_string.cpp)
+target_link_libraries(melano_time melano_string)

@@ -25,10 +25,10 @@
 #include <stdexcept>
 #include <memory>
 
-#include "melanolib/utils/utils.hpp"
+#include "melanolib/utils/type_utils.hpp"
 
 namespace melanolib {
-namespace library {
+namespace dynlib {
 
 using LoadFlags = int;
 
@@ -68,7 +68,7 @@ public:
     /**
      * \brief Loads the given library
      */
-    explicit Library(const std::string& library_file, library::LoadFlags flags);
+    explicit Library(const std::string& library_file, dynlib::LoadFlags flags);
 
 
     /**
@@ -79,7 +79,7 @@ public:
     /**
      * \brief Closes and -re opens the library
      */
-    void reload(library::LoadFlags flags) const;
+    void reload(dynlib::LoadFlags flags) const;
 
     /**
      * \brief Name of the file this library has been loaded from
@@ -152,7 +152,7 @@ private:
 
 };
 
-} // namespace library
+} // namespace dynlib
 } // namespace melanolib
 
 #endif // MELANOLIB_LIBRARY_HPP

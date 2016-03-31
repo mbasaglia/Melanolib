@@ -19,12 +19,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "melanolib/library/library.hpp"
+#include "melanolib/dynlib/library.hpp"
 
 #if __has_include(<dlfcn.h>)
 #include <dlfcn.h>
 
-class melanolib::library::Library::Private
+class melanolib::dynlib::Library::Private
 {
 public:
     void* handle = nullptr;
@@ -70,7 +70,7 @@ public:
 
 #else
 
-class melanolib::library::Library::Private
+class melanolib::dynlib::Library::Private
 {
 public:
     void* handle = nullptr;
@@ -101,7 +101,7 @@ public:
 #endif
 
 namespace melanolib {
-namespace library {
+namespace dynlib {
 
 Library::Library(const std::string& library_file, LoadFlags flags)
     : p(std::make_shared<Private>())
@@ -137,11 +137,11 @@ void* Library::resolve_raw(const std::string& name) const
 }
 
 
-void Library::reload(library::LoadFlags flags) const
+void Library::reload(dynlib::LoadFlags flags) const
 {
     p->close();
     p->open(flags);
 }
 
-} // namespace library
+} // namespace dynlib
 } // namespace melanolib
