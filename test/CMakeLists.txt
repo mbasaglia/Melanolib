@@ -28,6 +28,7 @@ if (ENABLE_TESTS)
 
     test_target(test_string melano_stringutils)
     test_target(test_time melano_time)
+    test_target(test_geo)
 
     # Coverage
     add_custom_target(test_all

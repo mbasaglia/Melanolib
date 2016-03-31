@@ -23,10 +23,42 @@
 
 #include <algorithm>
 #include <type_traits>
+#include <cmath>
 
 namespace melanolib {
-
 namespace math {
+
+constexpr double pi = 3.1415926535897932384626433832795;
+constexpr double tau = 6.283185307179586476925286766559;
+constexpr double e = 2.718281828459045235360287471352662;
+
+using std::fmod;
+
+using std::ceil;
+using std::floor;
+using std::round;
+using std::trunc;
+
+using std::sqrt;
+using std::exp;
+using std::pow;
+using std::log;
+using std::log2;
+
+using std::sin;
+using std::cos;
+using std::tan;
+using std::asin;
+using std::acos;
+using std::atan;
+using std::atan2;
+
+using std::sinh;
+using std::cosh;
+using std::tanh;
+using std::asinh;
+using std::acosh;
+using std::atanh;
 
 /**
  * \brief Truncates a number
@@ -100,7 +132,7 @@ template<class T, class...Ts>
  * \brief Absolute value
  */
 template<class T>
-    inline constexpr T abs(T&& x)
+    inline constexpr T abs(T x)
     {
         return x < 0 ? -x : x;
     }
@@ -154,6 +186,40 @@ template<class Argument, class Arg2, class = std::enable_if_t<!std::is_same<Argu
             Common(std::forward<Arg2>(max_value))
         );
     }
+
+/**
+ * \brief Compares two floating point values
+ * \returns \c true if their values can be considered equal
+ * \todo Unit tests
+ */
+constexpr inline bool fuzzy_compare(double a, double b, double max_error = 0.001)
+{
+    return (abs(a - b) / (b == 0 ? 1 : b)) < max_error;
+}
+
+
+
+namespace detail {
+
+
+template<class T>
+    struct fuzzy_compare_equals
+    {
+        constexpr bool operator() (T a, T b) const
+        {
+            return fuzzy_compare(a, b);
+        }
+    };
+
+} // namespace detail
+
+template<class T>
+    struct compare_equals : std::conditional_t<
+        std::is_floating_point<T>::value,
+        detail::fuzzy_compare_equals<T>,
+        std::equal_to<T>
+    >
+    {};
 
 } // namespace math
 } // namespace melanolib
