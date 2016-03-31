@@ -16,8 +16,8 @@
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
-add_library(melano)
-target_link_libraries(melano melano_random melano_dynlib melano_stringutils melano_time)
+add_library(melano INTERFACE)
+target_link_libraries(melano INTERFACE melano_random melano_dynlib melano_stringutils melano_time)
 
 add_subdirectory(math)
 add_subdirectory(string)
