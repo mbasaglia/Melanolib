@@ -96,17 +96,16 @@ BOOST_AUTO_TEST_CASE( test_circle )
     BOOST_CHECK ( !c.intersects(Rectangle(101, 0, 10, 10)) );
 }
 
-#define BOOST_CHECK_FLOAT(a, b) melanolib::math::fuzzy_compare(a, b)
-
 BOOST_AUTO_TEST_CASE( test_line )
 {
     Line l ({0, 0}, {10, 10});
-    BOOST_CHECK ( l == Line(Point(0, 0), 10 * melanolib::math::sqrt(2), melanolib::math::pi / 4) );
-    BOOST_CHECK_FLOAT ( l.length(), melanolib::math::sqrt(2) );
-    BOOST_CHECK_FLOAT ( l.angle(), melanolib::math::pi / 4 );
+    auto length = 10 * melanolib::math::sqrt(2);
+    BOOST_CHECK ( l == Line(Point(0, 0), length, melanolib::math::pi / 4) );
+    BOOST_CHECK ( melanolib::math::fuzzy_compare(l.length(), length) );
+    BOOST_CHECK ( melanolib::math::fuzzy_compare(l.angle(), melanolib::math::pi / 4) );
 
     l.set_angle(0);
-    BOOST_CHECK ( l.p2 == Point(10 * melanolib::math::sqrt(2), 0) );
+    BOOST_CHECK ( l.p2 == Point(length, 0) );
     l.set_length(10);
     BOOST_CHECK ( l.p2 == Point(10, 0) );
 
