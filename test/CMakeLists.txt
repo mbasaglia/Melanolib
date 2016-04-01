@@ -30,6 +30,7 @@ if (ENABLE_TESTS)
     test_target(test_time melano_time)
     test_target(test_geo)
     test_target(test_gsl)
+    test_target(test_math)
 
     # Coverage
     add_custom_target(run_tests

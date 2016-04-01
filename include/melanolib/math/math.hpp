@@ -34,11 +34,6 @@ constexpr double e = 2.718281828459045235360287471352662;
 
 using std::fmod;
 
-using std::ceil;
-using std::floor;
-using std::round;
-using std::trunc;
-
 using std::sqrt;
 using std::exp;
 using std::pow;
@@ -61,7 +56,7 @@ using std::acosh;
 using std::atanh;
 
 /**
- * \brief Truncates a number
+ * \brief Truncates a number (rounds towards zero)
  * \tparam Return   Return type (Must be an integral type)
  * \tparam Argument Argument type (Must be a floating point type)
  */
@@ -72,19 +67,22 @@ template<class Return=int, class Argument=double>
     }
 
 /**
- * \brief Round a number (constexpr-friendly)
+ * \brief Rounds a number towards the closest integer
  * \tparam Return   Return type (Must be an integral type)
  * \tparam Argument Argument type (Must be a floating point type)
  */
 template<class Return=int, class Argument=double>
     constexpr Return round(Argument x)
     {
-        return truncate<Return>(x+Argument(0.5));
+        return truncate<Return>(x + Argument(x < 0 ? -0.5 : 0.5));
     }
 
 /**
  * \brief Get the fractional part of a floating-point number
  * \tparam Argument Argument type (Must be a floating point type)
+ *
+ * For negative numbers, it returns a negative value
+ * (eg: fractional(-3.4) == -0.4)
  */
 template<class Argument>
     constexpr auto fractional(Argument x)
@@ -93,7 +91,42 @@ template<class Argument>
     }
 
 /**
- * \brief Maximum between two values
+ * \brief Get the distance of a floating-point number from the previous integer
+ * \tparam Argument Argument type (Must be a floating point type)
+ *
+ * For negative numbers, it returns a positive value
+ * (eg: fractional(-3.4) == 0.6)
+ */
+template<class Argument>
+    constexpr auto positive_fractional(Argument x)
+    {
+        return x < 0 && fractional(x) < 0 ? 1 + fractional(x) : fractional(x);
+    }
+
+/**
+ * \brief Rounds a number towards negative infinitive
+ * \tparam Return   Return type (Must be an integral type)
+ * \tparam Argument Argument type (Must be a floating point type)
+ */
+template<class Return=int, class Argument=double>
+    constexpr Return floor(Argument x)
+    {
+        return truncate<Return>(x < 0 ? x - positive_fractional(x) : x);
+    }
+
+/**
+ * \brief Rounds a number towards negative infinitive
+ * \tparam Return   Return type (Must be an integral type)
+ * \tparam Argument Argument type (Must be a floating point type)
+ */
+template<class Return=int, class Argument=double>
+    constexpr Return ceil(Argument x)
+    {
+        return truncate<Return>(x < 0 || fractional(x) == 0 ? x : x + 1 - fractional(x));
+    }
+
+/**
+ * \brief (Stable) maximum between two values
  */
 template<class T>
     inline constexpr T max(T&& a, T&& b)
@@ -102,7 +135,7 @@ template<class T>
     }
 
 /**
- * \brief Maximum among several values
+ * \brief (Stable) maximum among several values
  */
 template<class T, class...Ts>
     inline constexpr T max(T&& a,  Ts&&... b)
@@ -111,7 +144,7 @@ template<class T, class...Ts>
     }
 
 /**
- * \brief Minimum between two values
+ * \brief (Stable) minimum between two values
  */
 template<class T>
     inline constexpr T min(T&& a, T&& b)
@@ -120,7 +153,7 @@ template<class T>
     }
 
 /**
- * \brief Minimum among several values
+ * \brief (Stable) minimum among several values
  */
 template<class T, class...Ts>
     inline constexpr T min(T&& a,  Ts&&... b)
@@ -190,7 +223,6 @@ template<class Argument, class Arg2, class = std::enable_if_t<!std::is_same<Argu
 /**
  * \brief Compares two floating point values
  * \returns \c true if their values can be considered equal
- * \todo Unit tests
  */
 constexpr inline bool fuzzy_compare(double a, double b, double max_error = 0.001)
 {
