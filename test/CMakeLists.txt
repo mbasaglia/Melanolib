@@ -29,21 +29,24 @@ if (ENABLE_TESTS)
     test_target(test_string melano_stringutils)
     test_target(test_time melano_time)
     test_target(test_geo)
+    test_target(test_gsl)
 
     # Coverage
-    add_custom_target(test_all
+    add_custom_target(run_tests
+        COMMAND cd ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND ctest -V
         DEPENDS ${TEST_TARGETS}
-        COMMENT "Building all tests"
+        COMMENT "Running all tests"
     )
+
 
     set(TRACEFILE "${CMAKE_CURRENT_BINARY_DIR}/melanolib_coverage.info")
     set(COVERAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/melanolib_lcov")
     add_custom_target(coverage
         COMMAND cd ${CMAKE_CURRENT_BINARY_DIR}
-        COMMAND ctest -V
         COMMAND lcov -c -d "${CMAKE_CURRENT_BINARY_DIR}" -b "${CMAKE_SOURCE_DIR}" -o ${TRACEFILE} --no-external
         COMMAND genhtml ${TRACEFILE} -o ${COVERAGE_DIR} -p "${CMAKE_SOURCE_DIR}" --demangle-cpp
-        DEPENDS ${TEST_TARGETS}
+        DEPENDS run_tests
     )
 
     add_custom_target(coverage_view
