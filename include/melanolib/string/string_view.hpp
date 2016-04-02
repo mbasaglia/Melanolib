@@ -23,7 +23,7 @@
 
 #include <iterator>
 #include <type_traits>
-#include "melanolib/c++-compat.hpp"
+#include "melanolib/utils/c++-compat.hpp"
 
 namespace melanolib {
 
