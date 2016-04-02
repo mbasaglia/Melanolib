@@ -123,9 +123,11 @@ BOOST_AUTO_TEST_CASE( test_rounding )
 
 struct StableInt
 {
-    int value = 0;
-    int order = 0;
+    int value;
+    int order;
 
+    StableInt(int value, int order) : value(value), order(order) {}
+    
     bool operator<(const StableInt& oth) const
     {
         return value < oth.value;
