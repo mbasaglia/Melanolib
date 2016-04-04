@@ -20,7 +20,7 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include "melanolib/time/time.hpp"
+#include "melanolib/time/date_time.hpp"
 #include "melanolib/time/time_string.hpp"
 #include "melanolib/time/time_parser.hpp"
 

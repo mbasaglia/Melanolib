@@ -22,7 +22,7 @@
 #define TIME_PARSER_HPP
 
 #include "melanolib/string/stringutils.hpp"
-#include "melanolib/time/time.hpp"
+#include "melanolib/time/date_time.hpp"
 #include "melanolib/time/time_string.hpp"
 
 namespace melanolib {
