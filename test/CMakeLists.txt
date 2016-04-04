@@ -21,7 +21,7 @@ if (BUILD_TESTING)
         target_link_libraries(${test_name} ${ARGN})
         target_link_libraries(${test_name} ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
         add_test (NAME ${test_name} COMMAND ${test_name})
-        add_dependencies(test_all ${test_name})
+        add_dependencies(tests_run ${test_name})
     endfunction(test_target)
 
     test_target(test_string melano_stringutils)
