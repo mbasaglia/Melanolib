@@ -119,6 +119,7 @@ public:
         {
             // Note: between P and T there could be years/months/weeks/days in duration
             scan();
+            duration = token_val<Duration>();
         }
 
         // Read multiple number/unit pairs

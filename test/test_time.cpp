@@ -177,10 +177,18 @@ BOOST_AUTO_TEST_CASE( test_DateTime )
     BOOST_CHECK( time == DateTime(2017,Month::MAY,days(17),hours(5),minutes(0),seconds(0),milliseconds(0)) );
 
     // compound setters
+    time.set_time(DateTime(1976, Month::MAY, days(21), hours(18), minutes(35), seconds(37), milliseconds(97)));
+    BOOST_CHECK( time == DateTime(2017, Month::MAY, days(17), hours(18), minutes(35), seconds(37), milliseconds(97)) );
     time.set_time(hours(12),minutes(34),seconds(56),milliseconds(78));
     BOOST_CHECK( time == DateTime(2017,Month::MAY,days(17),hours(12),minutes(34),seconds(56),milliseconds(78)) );
-    time.set_date(1974,Month::JULY,days(25));
+    time.set_date(1974, Month::JULY, days(25));
     BOOST_CHECK( time == DateTime(1974,Month::JULY,days(25),hours(12),minutes(34),seconds(56),milliseconds(78)) );
+    time.set_date(Month::JUNE, days(26));
+    BOOST_CHECK( time == DateTime(1974,Month::JUNE,days(26),hours(12),minutes(34),seconds(56),milliseconds(78)) );
+    time.set_date(DateTime(1976, Month::MAY, days(21)));
+    BOOST_CHECK( time == DateTime(1976,Month::MAY,days(21),hours(12),minutes(34),seconds(56),milliseconds(78)) );
+    time.set_month(Month::APRIL);
+    BOOST_CHECK( time == DateTime(1976,Month::APRIL,days(21),hours(12),minutes(34),seconds(56),milliseconds(78)) );
 
 
     time = DateTime(2015,Month::JANUARY,days(1),hours(0),minutes(0));
@@ -443,6 +451,7 @@ BOOST_AUTO_TEST_CASE( test_TimeParser )
     BOOST_CHECK( parse_duration("43:21 h") == hours(43)+minutes(21) );
     BOOST_CHECK( parse_duration("43:21:23 h") == hours(43)+minutes(21)+seconds(23) );
     BOOST_CHECK( parse_duration("43:21:23.456 h") == hours(43)+minutes(21)+seconds(23)+milliseconds(456) );
+    BOOST_CHECK( parse_duration("PT43:21:23") == hours(43)+minutes(21)+seconds(23) );
 
     BOOST_CHECK( parse_duration("21:23 m") == minutes(21)+seconds(23) );
     /// \todo allow "21:23.456", which must be minutes

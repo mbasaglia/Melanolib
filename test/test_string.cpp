@@ -348,12 +348,12 @@ BOOST_AUTO_TEST_CASE( test_to_uint )
 
 BOOST_AUTO_TEST_CASE( test_icase_equal )
 {
-    BOOST_CHECK( string::icase_equal("foo","foo") );
-    BOOST_CHECK( string::icase_equal("foo","FOO") );
-    BOOST_CHECK( !string::icase_equal("foo","fo") );
-    BOOST_CHECK( string::icase_equal("foo_-'","FOO_-'") );
-    BOOST_CHECK( string::icase_equal("","") );
-    BOOST_CHECK( !string::icase_equal("foo","") );
+    BOOST_CHECK( string::icase_equal("foo", "foo") );
+    BOOST_CHECK( string::icase_equal("foo", "FOO") );
+    BOOST_CHECK( !string::icase_equal("foo", "fo") );
+    BOOST_CHECK( string::icase_equal("foo_-'", "FOO_-'") );
+    BOOST_CHECK( string::icase_equal("", "") );
+    BOOST_CHECK( !string::icase_equal("foo", "") );
 }
 
 BOOST_AUTO_TEST_CASE( test_to_string )
@@ -541,10 +541,11 @@ BOOST_AUTO_TEST_CASE( test_QuickStream )
     BOOST_CHECK( !qs.regex_match(re) );
     BOOST_CHECK( qs.get_regex(re) == "" );
     std::smatch match;
-    BOOST_CHECK( !qs.regex_match(re,match) );
+    BOOST_CHECK( !qs.regex_match(re, match) );
+    BOOST_CHECK( !qs.get_regex(re, match) );
     qs.set_pos(0);
     std::regex re1("([0-9]+)([a-z]+)");
-    BOOST_CHECK( qs.get_regex(re1,match) );
+    BOOST_CHECK( qs.get_regex(re1, match) );
     BOOST_CHECK( match[1] == "123" );
     BOOST_CHECK( match[2] == "foo" );
     BOOST_CHECK( qs.eof() );
