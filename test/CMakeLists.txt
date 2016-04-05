@@ -29,6 +29,12 @@ if (BUILD_TESTING)
     test_target(test_geo)
     test_target(test_gsl)
     test_target(test_math)
+
+    test_target(test_dynlib melano_dynlib)
+    add_library(dynlib_example MODULE dynlib_example.cpp)
+    add_dependencies(test_dynlib dynlib_example)
+    set_property(TARGET test_dynlib PROPERTY COMPILE_DEFINITIONS LIB_FILE="$<TARGET_FILE:dynlib_example>")
+
 else()
     message(STATUS "Test targets disabled")
 endif()

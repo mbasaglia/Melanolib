@@ -113,7 +113,7 @@ public:
         T& resolve_global(const std::string& name) const
         {
             if ( void* ptr = resolve_raw(name) )
-                return *reinterpret_cast<T>(ptr);
+                return *reinterpret_cast<T*>(ptr);
             throw SymbolNotFoundError(name, filename());
         }
 

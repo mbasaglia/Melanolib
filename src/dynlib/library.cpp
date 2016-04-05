@@ -38,7 +38,8 @@ public:
 
     void close()
     {
-        dlclose(handle);
+        if ( handle )
+            dlclose(handle);
     }
 
     void open(LoadFlags flags)
@@ -123,7 +124,7 @@ bool Library::error() const
 
 std::string Library::error_string() const
 {
-    return p->error_string;
+    return p->error_string ? p->error_string : "";
 }
 
 std::string Library::filename() const
