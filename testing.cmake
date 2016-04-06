@@ -28,8 +28,8 @@ set(TRACEFILE "${CMAKE_BINARY_DIR}/coverage.info")
 set(COVERAGE_DIR "${CMAKE_BINARY_DIR}/lcov")
 add_custom_target(tests_coverage
     COMMAND cd ${CMAKE_BINARY_DIR}
-    COMMAND lcov -c -d "${CMAKE_CURRENT_BINARY_DIR}" -b "${CMAKE_SOURCE_DIR}" -o ${TRACEFILE} --no-external
-    COMMAND genhtml ${TRACEFILE} -o ${COVERAGE_DIR} -p "${CMAKE_SOURCE_DIR}" --demangle-cpp
+    COMMAND lcov -c -d "${CMAKE_CURRENT_BINARY_DIR}" -b "${CMAKE_SOURCE_DIR}" -o ${TRACEFILE} --no-external --rc lcov_branch_coverage=1
+    COMMAND genhtml ${TRACEFILE} -o ${COVERAGE_DIR} -p "${CMAKE_SOURCE_DIR}" --demangle-cpp --branch-coverage
     DEPENDS tests_run
 )
 

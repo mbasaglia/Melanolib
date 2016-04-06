@@ -122,6 +122,11 @@ bool Library::error() const
     return !p->has_handle() || p->error_string;
 }
 
+bool Library::fatal_error() const
+{
+    return !p->has_handle();
+}
+
 std::string Library::error_string() const
 {
     return p->error_string ? p->error_string : "";

@@ -24,17 +24,18 @@
 
 using namespace melanolib::dynlib;
 
-BOOST_AUTO_TEST_CASE( test_library_success )
+BOOST_AUTO_TEST_CASE( test_library_load_success )
 {
     Library lib(LIB_FILE, LoadNow|DeepBind|LoadThrows);
 
     BOOST_CHECK( lib.filename() == LIB_FILE );
     BOOST_CHECK( !lib.error() );
     BOOST_CHECK( lib.error_string().empty() );
+    BOOST_CHECK( !lib.fatal_error() );
     BOOST_CHECK( bool(lib) );
 }
 
-BOOST_AUTO_TEST_CASE( test_library_resolve )
+BOOST_AUTO_TEST_CASE( test_library_resolve_success )
 {
     Library lib(LIB_FILE, LoadNow|DeepBind|LoadThrows);
 
@@ -46,7 +47,7 @@ BOOST_AUTO_TEST_CASE( test_library_resolve )
     BOOST_CHECK( lib.resolve_global<int>("global") == 2 );
 }
 
-BOOST_AUTO_TEST_CASE( test_library_error )
+BOOST_AUTO_TEST_CASE( test_library_load_error )
 {
     auto load = [](int flags = 0) {
         return Library("wrong_" LIB_FILE "_does_not_exist", LoadNow|DeepBind|flags);
@@ -56,6 +57,22 @@ BOOST_AUTO_TEST_CASE( test_library_error )
     BOOST_REQUIRE_NO_THROW( load() );
     Library lib = load();
     BOOST_CHECK( lib.error() );
+    BOOST_CHECK( lib.fatal_error() );
     BOOST_CHECK( !bool(lib) );
     BOOST_CHECK( !lib.error_string().empty() );
+}
+
+BOOST_AUTO_TEST_CASE( test_library_resolve_error )
+{
+    Library lib(LIB_FILE, LoadNow|DeepBind|LoadThrows);
+
+    BOOST_REQUIRE_THROW( lib.resolve_function<int (int)>("fubar"), SymbolNotFoundError );
+    BOOST_CHECK( lib.error() );
+    BOOST_CHECK( !lib.fatal_error() );
+    BOOST_CHECK( bool(lib) );
+    BOOST_CHECK( !lib.error_string().empty() );
+    BOOST_REQUIRE_THROW( lib.call_function<int>("fubar", 7), SymbolNotFoundError );
+    BOOST_REQUIRE_THROW( lib.resolve_global<int>("fubar"), SymbolNotFoundError );
+
+    BOOST_CHECK( lib.resolve_global<int>("global") == 2 );
 }

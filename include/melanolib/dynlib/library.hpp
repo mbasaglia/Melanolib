@@ -92,6 +92,11 @@ public:
     bool error() const;
 
     /**
+     * \brief Whether an error that prevents the library from working has occurred
+     */
+    bool fatal_error() const;
+
+    /**
      * \brief The error message for the latest error
      * \pre error() returns true
      */
@@ -102,7 +107,7 @@ public:
      */
     explicit operator bool() const
     {
-        return !error();
+        return !fatal_error();
     }
 
     /**

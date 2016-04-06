@@ -29,6 +29,17 @@ BOOST_AUTO_TEST_CASE( test_point )
     BOOST_CHECK ( distance(Point(0, 3), Point(4, 0)) == 5 );
     BOOST_CHECK ( -Point(3, 4) * 2 == Point(-6, -8) );
     BOOST_CHECK ( -2 * Point(3, 4) == Point(-6, -8) );
+
+    BOOST_CHECK ( Point(1, 0) != Point(0, 0) );
+    BOOST_CHECK ( Point(0, 1) != Point(0, 0) );
+    BOOST_CHECK ( Point(0, 0) != Point(1, 0) );
+    BOOST_CHECK ( Point(0, 0) != Point(0, 1) );
+    BOOST_CHECK ( !(Point(0, 0) != Point(0, 0)) );
+
+    BOOST_CHECK ( !(Point(1, 0) == Point(0, 0)) );
+    BOOST_CHECK ( !(Point(0, 1) == Point(0, 0)) );
+    BOOST_CHECK ( !(Point(0, 0) == Point(1, 0)) );
+    BOOST_CHECK ( !(Point(0, 0) == Point(0, 1)) );
 }
 
 BOOST_AUTO_TEST_CASE( test_rectangle )
@@ -111,4 +122,15 @@ BOOST_AUTO_TEST_CASE( test_line )
 
     for ( int i = 0; i < 10; i++ )
         BOOST_CHECK ( l.point_at(i / 10.0) == Point(i, 0) );
+
+    BOOST_CHECK ( !(Line({0, 0}, {10, 10}) == Line({0, 0}, {10,  9})) );
+    BOOST_CHECK ( !(Line({0, 0}, {10, 10}) == Line({0, 0}, { 9, 10})) );
+    BOOST_CHECK ( !(Line({0, 0}, {10, 10}) == Line({0, 1}, {10, 10})) );
+    BOOST_CHECK ( !(Line({0, 0}, {10, 10}) == Line({1, 0}, {10, 10})) );
+
+    BOOST_CHECK ( !(Line({0, 0}, {10, 10}) != Line({0, 0}, {10, 10})) );
+    BOOST_CHECK ( Line({0, 0}, {10, 10}) != Line({0, 0}, {10, 9}) );
+    BOOST_CHECK ( Line({0, 0}, {10, 10}) != Line({0, 0}, {9, 10}) );
+    BOOST_CHECK ( Line({0, 0}, {10, 10}) != Line({0, 1}, {10, 10}) );
+    BOOST_CHECK ( Line({0, 0}, {10, 10}) != Line({1, 0}, {10, 10}) );
 }
