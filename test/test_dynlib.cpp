@@ -76,3 +76,16 @@ BOOST_AUTO_TEST_CASE( test_library_resolve_error )
 
     BOOST_CHECK( lib.resolve_global<int>("global") == 2 );
 }
+
+BOOST_AUTO_TEST_CASE( test_library_static )
+{
+    /// \todo Somehow make this test portable
+    BOOST_CHECK_EQUAL(Library::library_prefix(), "lib");
+    BOOST_CHECK_EQUAL(Library::library_suffix(), ".so");
+    BOOST_CHECK(!Library::is_library_basename("lib.so"));
+    BOOST_CHECK(Library::is_library_basename("libfoo.so"));
+    BOOST_CHECK(!Library::is_library_basename("lubfoo.so"));
+    BOOST_CHECK(!Library::is_library_basename("libfoo.sup"));
+    BOOST_CHECK_EQUAL(Library::library_name("libfoo.so"), "foo");
+    BOOST_CHECK_EQUAL(Library::library_name("libfoo.sup"), "");
+}

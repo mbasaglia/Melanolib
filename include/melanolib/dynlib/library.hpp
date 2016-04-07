@@ -145,6 +145,33 @@ public:
             return func(std::forward<Args>(args)...);
         }
 
+    /**
+     * \brief Suffix for library file names
+     *
+     * Eg: .so etc
+     */
+    static std::string library_suffix();
+
+    /**
+     * \brief Suffix for library file names
+     *
+     * Eg: lib
+     */
+    static std::string library_prefix();
+
+    /**
+     * \brief Whether the given string is a proper basename for a library file
+     *
+     * This means it starts with suffix and ends with prefix
+     */
+    static bool is_library_basename(const std::string& name);
+
+    /**
+     * \brief Extracts the library name from a file basename
+     * \pre is_library_basename(basename)
+     */
+    static std::string library_name(std::string basename);
+
 private:
     /**
      * \brief Resolves a symbol and returns it as a void pointer

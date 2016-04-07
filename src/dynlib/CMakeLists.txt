@@ -13,5 +13,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/library_name.in.hpp
+    ${CMAKE_CURRENT_BINARY_DIR}/library_name.hpp
+)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 add_library(melano_dynlib library.cpp)
 target_link_libraries(melano_dynlib ${CMAKE_DL_LIBS})
