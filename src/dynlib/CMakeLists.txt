@@ -13,5 +13,5 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-add_library(melano_dynlib library.cpp)
+add_library(melano_dynlib SHARED library.cpp)
 target_link_libraries(melano_dynlib ${CMAKE_DL_LIBS})
