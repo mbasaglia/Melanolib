@@ -20,6 +20,8 @@
  */
 
 #include "melanolib/dynlib/library.hpp"
+#include "library_name.hpp"
+#include "melanolib/string/stringutils.hpp"
 
 #if __has_include(<dlfcn.h>)
 #include <dlfcn.h>
@@ -38,7 +40,8 @@ public:
 
     void close()
     {
-        dlclose(handle);
+        if ( handle )
+            dlclose(handle);
     }
 
     void open(LoadFlags flags)
@@ -121,9 +124,14 @@ bool Library::error() const
     return !p->has_handle() || p->error_string;
 }
 
+bool Library::fatal_error() const
+{
+    return !p->has_handle();
+}
+
 std::string Library::error_string() const
 {
-    return p->error_string;
+    return p->error_string ? p->error_string : "";
 }
 
 std::string Library::filename() const
@@ -142,6 +150,36 @@ void Library::reload(dynlib::LoadFlags flags) const
     p->close();
     p->open(flags);
 }
+
+std::string Library::library_prefix()
+{
+    return LIB_PREFIX;
+}
+
+std::string Library::library_suffix()
+{
+    return LIB_SUFFIX;
+}
+
+bool Library::is_library_basename(const std::string& name)
+{
+    return name.size() > LIB_PREFIX.size() + LIB_SUFFIX.size() &&
+           string::starts_with(name, LIB_PREFIX) &&
+           string::ends_with(name, LIB_SUFFIX);
+}
+
+std::string Library::library_name(std::string basename)
+{
+    if ( !is_library_basename(basename) )
+        return "";
+
+    basename.erase(0, LIB_PREFIX.size());
+    basename.erase(basename.size() - LIB_SUFFIX.size());
+
+    return basename;
+}
+
+
 
 } // namespace dynlib
 } // namespace melanolib

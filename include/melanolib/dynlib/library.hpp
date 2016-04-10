@@ -92,6 +92,11 @@ public:
     bool error() const;
 
     /**
+     * \brief Whether an error that prevents the library from working has occurred
+     */
+    bool fatal_error() const;
+
+    /**
      * \brief The error message for the latest error
      * \pre error() returns true
      */
@@ -102,7 +107,7 @@ public:
      */
     explicit operator bool() const
     {
-        return !error();
+        return !fatal_error();
     }
 
     /**
@@ -113,7 +118,7 @@ public:
         T& resolve_global(const std::string& name) const
         {
             if ( void* ptr = resolve_raw(name) )
-                return *reinterpret_cast<T>(ptr);
+                return *reinterpret_cast<T*>(ptr);
             throw SymbolNotFoundError(name, filename());
         }
 
@@ -139,6 +144,33 @@ public:
             auto func = resolve_function<Ret(Args...)>(name);
             return func(std::forward<Args>(args)...);
         }
+
+    /**
+     * \brief Suffix for library file names
+     *
+     * Eg: .so etc
+     */
+    static std::string library_suffix();
+
+    /**
+     * \brief Suffix for library file names
+     *
+     * Eg: lib
+     */
+    static std::string library_prefix();
+
+    /**
+     * \brief Whether the given string is a proper basename for a library file
+     *
+     * This means it starts with suffix and ends with prefix
+     */
+    static bool is_library_basename(const std::string& name);
+
+    /**
+     * \brief Extracts the library name from a file basename
+     * \pre is_library_basename(basename)
+     */
+    static std::string library_name(std::string basename);
 
 private:
     /**

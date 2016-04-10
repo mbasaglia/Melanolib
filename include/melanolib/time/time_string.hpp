@@ -21,7 +21,7 @@
 #ifndef TIME_STRING_HPP
 #define TIME_STRING_HPP
 
-#include "melanolib/time/time.hpp"
+#include "melanolib/time/date_time.hpp"
 #include "melanolib/string/language.hpp"
 #include "melanolib/string/stringutils.hpp"
 

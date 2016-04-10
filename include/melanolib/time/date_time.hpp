@@ -18,293 +18,22 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef MELANOLIB_TIME_HPP
-#define MELANOLIB_TIME_HPP
+#ifndef MELANOLIB_TIME_DATETIME_HPP
+#define MELANOLIB_TIME_DATETIME_HPP
 
 #include <chrono>
-#include <functional>
-#include <cstdint>
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
 #include <thread>
 
 #include "melanolib/utils/functional.hpp"
-#include "melanolib/utils/c++-compat.hpp"
 #include "melanolib/math/math.hpp"
+#include "melanolib/time/units.hpp"
 
 namespace melanolib {
-/**
- * \brief Namespace for time utilities
- */
 namespace time {
 
-/**
- * \brief A timer which performs a task after some time on a separate thread
- * \tparam Clock A clock type
- */
-template<class Clock>
-    class basic_timer
-    {
-    public:
-        using clock_type    = Clock;                    ///< Clock
-        using duration_type = typename Clock::duration; ///< Duration
-        using function_type = std::function<void()>;    ///< Callback type
-
-        explicit basic_timer( function_type action = {},
-                              duration_type timeout = duration_type::zero(),
-                              bool repeating = true
-                            )
-            :
-            timeout(std::move(timeout)),
-            repeating(repeating),
-            action(std::move(action))
-        {}
-
-        basic_timer(const basic_timer& rhs)
-            : timeout(rhs.timeout), repeating(rhs.repeating), action(rhs.action)
-        {}
-
-        basic_timer& operator=(const basic_timer& rhs)
-        {
-            timeout = rhs.timeout;
-            repeating = rhs.repeating.load();
-            action = rhs.action;
-            return *this;
-        }
-
-        // note: mutex not move constructible
-        basic_timer(basic_timer&& rhs) :
-            timeout     (std::move(rhs.timeout)),
-            repeating   (std::move(rhs.repeating)),
-            action      (std::move(rhs.action))
-        {
-            rhs.stop();
-        }
-
-        basic_timer& operator=(basic_timer&& rhs)
-        {
-            rhs.stop();
-            timeout     = std::move(rhs.timeout);
-            repeating   = rhs.repeating.load();
-            action      = std::move(rhs.action);
-            return *this;
-        }
-
-        ~basic_timer() { stop(); }
-
-        /**
-         * \brief Start the timer with the already-set duration
-         * \note If \c timeout is zero, \c repeating will be ignored
-         * \return \b true on success
-         */
-        bool start()
-        {
-            if ( running() || !action )
-                return false;
-            if ( timeout <= duration_type::zero() )
-                callback(action);
-            else
-                thread = std::move(std::thread([this]{run();}));
-            return running();
-        }
-
-        /**
-         * \brief Whether the timer has been started and is still running
-         */
-        bool running() const
-        {
-            return thread.joinable();
-        }
-
-        /**
-         * \brief Stop the timer and set a new timeout
-         * \return \b true on success
-         */
-        bool reset(duration_type timeout)
-        {
-            stop();
-            this->timeout = timeout;
-            return start();
-        }
-
-        /**
-         * \brief Stop the timer
-         */
-        void stop()
-        {
-            if ( running() )
-            {
-                active = false;
-                condition.notify_all();
-                try {
-                    thread.join();
-                // catch in the case the thread joined early
-                } catch(const std::invalid_argument&) {}
-            }
-        }
-
-    private:
-        duration_type           timeout;         ///< Timer duration
-        std::atomic<bool>       repeating{false};///< Whether it should start over once finished
-        std::atomic<bool>       active{false};   ///< Whether it's currently running
-        std::condition_variable condition;       ///< Wait condition
-        function_type           action;          ///< Executed on timeout
-        std::thread             thread;          ///< Thread where the callback is executed
-
-        /**
-         * \brief Runs the timer
-         */
-        void run()
-        {
-            std::mutex mutex;
-            active = true;
-            while ( active && repeating )
-            {
-                std::unique_lock<std::mutex> lock(mutex);
-                condition.wait_until(lock,clock_type::now()+timeout,[this]{return !active;});
-                if ( active )
-                    action();
-            }
-            active = false;
-        }
-
-    };
-
-/**
- * \brief Timer using the wall clock
- */
-using Timer = basic_timer<std::chrono::system_clock>;
-
-using std::chrono::milliseconds;
-using std::chrono::seconds;
-using std::chrono::minutes;
-using std::chrono::hours;
-using days =  std::chrono::duration<int64_t, std::ratio<(24*3600)>>;
-using weeks =  std::chrono::duration<int64_t, std::ratio<(24*3600*7)>>;
-
-/**
- * \brief Month enum
- */
-enum class Month : uint8_t {
-    JANUARY  = 1,
-    FEBRUARY = 2,
-    MARCH    = 3,
-    APRIL    = 4,
-    MAY      = 5,
-    JUNE     = 6,
-    JULY     = 7,
-    AUGUST   = 8,
-    SEPTEMBER= 9,
-    OCTOBER  =10,
-    NOVEMBER =11,
-    DECEMBER =12
-};
-
-constexpr Month operator- (Month m, int i) noexcept;
-inline constexpr Month operator+ (Month m, int i) noexcept
-{
-    return i > 0 ? Month((((int(m)-1)+i)%12)+1) : m - -i;
-}
-
-inline SUPER_CONSTEXPR Month& operator+= (Month& m, int i) noexcept
-{
-    m = m + i;
-    return m;
-}
-inline constexpr Month operator- (Month m, int i) noexcept
-{
-    return i < 0 ? m + -i : ( i < int(m) ? Month(int(m)-i) : m - (i-12) );
-}
-
-inline SUPER_CONSTEXPR Month& operator-= (Month& m, int i) noexcept
-{
-    m = m - i;
-    return m;
-}
-
-inline SUPER_CONSTEXPR Month& operator++ (Month& m) noexcept
-{
-    return m += 1;
-}
-
-inline SUPER_CONSTEXPR Month operator++ (Month& m, int) noexcept
-{
-    auto c = m;
-    ++m;
-    return c;
-}
-
-inline SUPER_CONSTEXPR Month& operator-- (Month& m) noexcept
-{
-    return m -= 1;
-}
-
-inline SUPER_CONSTEXPR Month operator-- (Month& m, int) noexcept
-{
-    auto c = m;
-    --m;
-    return c;
-}
-
-/**
- * \brief Week day enum
- */
-enum class WeekDay : uint8_t {
-    MONDAY      = 1,
-    TUESDAY     = 2,
-    WEDNESDAY   = 3,
-    THURSDAY    = 4,
-    FRIDAY      = 5,
-    SATURDAY    = 6,
-    SUNDAY      = 7
-};
-
-constexpr WeekDay operator- (WeekDay m, int i) noexcept;
-inline constexpr WeekDay operator+ (WeekDay m, int i) noexcept
-{
-    return i > 0 ? WeekDay((((int(m)-1)+i)%7)+1) : m - -i;
-}
-
-inline SUPER_CONSTEXPR WeekDay& operator+= (WeekDay& m, int i) noexcept
-{
-    m = m + i;
-    return m;
-}
-inline constexpr WeekDay operator- (WeekDay m, int i) noexcept
-{
-    return i < 0 ? m + -i : ( i < int(m) ? WeekDay(int(m)-i) : m - (i-7) );
-}
-
-inline SUPER_CONSTEXPR WeekDay& operator-= (WeekDay& m, int i) noexcept
-{
-    m = m - i;
-    return m;
-}
-
-inline SUPER_CONSTEXPR WeekDay& operator++ (WeekDay& m) noexcept
-{
-    return m += 1;
-}
-
-inline SUPER_CONSTEXPR WeekDay operator++ (WeekDay& m, int) noexcept
-{
-    auto c = m;
-    ++m;
-    return c;
-}
-
-inline SUPER_CONSTEXPR WeekDay& operator-- (WeekDay& m) noexcept
-{
-    return m -= 1;
-}
-
-inline SUPER_CONSTEXPR WeekDay operator-- (WeekDay& m, int) noexcept
-{
-    auto c = m;
-    --m;
-    return c;
-}
 /**
  * \brief A class representing a date and time
  * \note Some functions assume std::chrono::system_clock starts on the unix epoch
@@ -320,7 +49,7 @@ public:
     DateTime() : DateTime(Clock::now()) {}
 
     DateTime(const Time& time)
-        : DateTime(1970,Month::JANUARY,days(1),hours(0),minutes(0))
+        : DateTime(1970, Month::JANUARY, days(1), hours(0), minutes(0))
     {
         *this += time.time_since_epoch();
     }
@@ -829,8 +558,8 @@ public:
 
 
 private:
-    int32_t     year_;          ///< Year
-    Month       month_;         ///< Month
+    int32_t    year_;          ///< Year
+    Month      month_;         ///< Month
     int8_t     day_;            ///< Day of the month [1,31]
     int8_t     hour_;           ///< Hour [0,23]
     int8_t     minute_;         ///< Minute [0,59]
@@ -881,7 +610,7 @@ private:
     // (-1 BC becomes 0 AD, which is equivalent to 400 AD)
     static constexpr int32_t positive_year(int32_t year) noexcept
     {
-        return year < 0 ? year+400*std::ceil(-year/400.0)+1 : year;
+        return year < 0 ? year + 400 * math::ceil(-year/400.0)+1 : year;
     }
 };
 
@@ -889,23 +618,12 @@ private:
  * \brief Parses the text description of a time point
  */
 DateTime parse_time(const std::string& text);
+
 /**
  * \brief Parses the text description of a duration
  */
 DateTime::Duration parse_duration(const std::string& text);
 
-
-
-/**
- * \brief Converts between time points belongong to different clocks
- */
-template<class TimeTo, class TimeFrom>
-    TimeTo time_point_convert(TimeFrom&& tp)
-{
-    return TimeTo::clock::now() + (tp - TimeFrom::clock::now());
-}
-
 } // namespace time
 } // namespace melanolib
-
-#endif // MELANOLIB_TIME_HPP
+#endif // MELANOLIB_TIME_DATETIME_HPP

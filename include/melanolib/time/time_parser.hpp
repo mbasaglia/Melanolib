@@ -22,7 +22,7 @@
 #define TIME_PARSER_HPP
 
 #include "melanolib/string/stringutils.hpp"
-#include "melanolib/time/time.hpp"
+#include "melanolib/time/date_time.hpp"
 #include "melanolib/time/time_string.hpp"
 
 namespace melanolib {
@@ -119,6 +119,7 @@ public:
         {
             // Note: between P and T there could be years/months/weeks/days in duration
             scan();
+            duration = token_val<Duration>();
         }
 
         // Read multiple number/unit pairs
