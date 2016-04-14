@@ -18,5 +18,5 @@ configure_file(
     ${CMAKE_CURRENT_BINARY_DIR}/library_name.hpp
 )
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-add_library(melano_dynlib SHARED library.cpp)
+add_melano_lib(melano_dynlib SHARED library.cpp)
 target_link_libraries(melano_dynlib ${CMAKE_DL_LIBS})

@@ -13,5 +13,5 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-add_library(melano_time SHARED date_time.cpp time_string.cpp)
+add_melano_lib(melano_time date_time.cpp time_string.cpp)
 target_link_libraries(melano_time melano_stringutils)
