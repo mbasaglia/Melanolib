@@ -82,14 +82,6 @@ std::string replace(const std::string& input, const std::string& from, const std
     return out;
 }
 
-bool simple_wildcard(const std::string& text, const std::string& pattern)
-{
-    std::regex regex_pattern (
-        "^"+replace(add_slashes(pattern,"^$\\.+?()[]{}|"),"*",".*")+"$" );
-    return std::regex_match(text,regex_pattern);
-}
-
-
 std::vector<std::string> regex_split(const std::string& input,
                                      const std::regex& pattern,
                                      bool skip_empty )

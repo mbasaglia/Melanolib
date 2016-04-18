@@ -20,7 +20,7 @@
  */
 #include "melanolib/time/time_string.hpp"
 
-#include "melanolib/string/stringutils.hpp"
+#include "melanolib/string/simple_stringutils.hpp"
 #include "melanolib/string/language.hpp"
 
 namespace melanolib {
