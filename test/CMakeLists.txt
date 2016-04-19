@@ -29,6 +29,7 @@ if (BUILD_TESTING)
     test_target(test_geo)
     test_target(test_gsl)
     test_target(test_math)
+    test_target(test_functional)
 
     test_target(test_dynlib melano_dynlib)
     add_library(dynlib_example MODULE dynlib_example.cpp)
