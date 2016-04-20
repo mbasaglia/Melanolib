@@ -16,6 +16,8 @@
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../include/")
+
 if(NOT DEFINED BUILD_SHARED_MELANO_LIBS)
     set(BUILD_SHARED_MELANO_LIBS ${BUILD_SHARED_LIBS})
 endif()
@@ -30,7 +32,6 @@ endfunction()
 
 add_library(melano INTERFACE)
 target_link_libraries(melano INTERFACE melano_random melano_dynlib melano_stringutils melano_time)
-
 
 add_subdirectory(math)
 add_subdirectory(string)
