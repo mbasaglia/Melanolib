@@ -81,7 +81,7 @@ std::string replace(const std::string& subject, const StringTrie& trie);
  *
  * \c * matches any sequence of characters, all other characters match themselves
  */
-bool simple_wildcard(const std::string& text, const std::string& pattern)
+inline bool simple_wildcard(const std::string& text, const std::string& pattern)
 {
     std::regex regex_pattern (
         "^"+replace(add_slashes(pattern,"^$\\.+?()[]{}|"),"*",".*")+"$" );
