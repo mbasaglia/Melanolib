@@ -23,6 +23,7 @@
 
 #include <functional>
 #include <utility>
+#include "melanolib/utils/type_utils.hpp"
 
 namespace melanolib {
 
@@ -38,6 +39,38 @@ template<class Functor, class... CallArgs>
     {
         if ( function )
             function(std::forward<CallArgs>(args)...);
+    }
+
+/**
+ * \brief Utility to call a function on a range
+ */
+template<class Functor, class Range, class... Args>
+    auto range_call(const Functor& functor, Range& range, Args&&... args)
+    {
+        return functor(std::begin(range), std::end(range), std::forward<Args>(args)...);
+    }
+
+template<class Functor, class Range, class... Args>
+    auto range_call(const Functor& functor, const Range& range, Args&&... args)
+    {
+        return functor(std::begin(range), std::end(range), std::forward<Args>(args)...);
+    }
+
+namespace detail {
+
+    template<class Range>
+        using IteratorType = decltype(std::begin(std::declval<Range>()));
+
+    template<class Return, class Iterator, class... Args>
+        using ResolvedRangeOverload = FunctionPointer<Return (Iterator, Iterator, Args...)>;
+}
+
+template<class Return, class Range, class... Args>
+    auto range_call_overload(
+        detail::ResolvedRangeOverload<Return, detail::IteratorType<Range>, Args...> functor,
+        Range&& range, Args&&... args)
+    {
+        return range_call(functor, std::forward<Range>(range), std::forward<Args>(args)...);
     }
 
 } // namespace melanolib

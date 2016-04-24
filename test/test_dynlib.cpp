@@ -49,13 +49,13 @@ BOOST_AUTO_TEST_CASE( test_library_resolve_success )
 
 BOOST_AUTO_TEST_CASE( test_library_load_error )
 {
-    auto load = [](int flags = 0) {
+    auto load = [](int flags) {
         return Library("wrong_" LIB_FILE "_does_not_exist", LoadNow|DeepBind|flags);
     };
 
     BOOST_REQUIRE_THROW( load(LoadThrows), LibraryError );
-    BOOST_REQUIRE_NO_THROW( load() );
-    Library lib = load();
+    BOOST_REQUIRE_NO_THROW( load(0) );
+    Library lib = load(0);
     BOOST_CHECK( lib.error() );
     BOOST_CHECK( lib.fatal_error() );
     BOOST_CHECK( !bool(lib) );

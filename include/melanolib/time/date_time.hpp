@@ -624,6 +624,35 @@ DateTime parse_time(const std::string& text);
  */
 DateTime::Duration parse_duration(const std::string& text);
 
+
+/**
+ * \brief Class representing a relative delta between two times
+ *
+ * It might end up being equivalent to different durations based on the
+ * starting dates.
+ */
+class TimeDelta
+{
+public:
+    template<class Duration>
+        constexpr TimeDelta(Duration duration)
+            : TimeDelta(0, 0, 0, std::chrono::duration_cast<time::milliseconds>(duration).count())
+        {}
+
+    constexpr TimeDelta(int32_t years, int32_t months, int64_t days, int64_t milliseconds)
+        : years(years),
+          months(months),
+          days(days),
+          milliseconds(milliseconds)
+        {}
+
+private:
+    int32_t years;
+    int32_t months;
+    int64_t days;
+    int64_t milliseconds;
+};
+
 } // namespace time
 } // namespace melanolib
 #endif // MELANOLIB_TIME_DATETIME_HPP

@@ -428,6 +428,24 @@ BOOST_AUTO_TEST_CASE( test_English )
     BOOST_CHECK( english.pronoun_to3rd("are you here?",me,you) == "is Melanobot here?" );
     BOOST_CHECK( english.pronoun_to3rd("my bot",me,you) == "Melanosuchus' bot" );
 
+    // pluralize
+    BOOST_CHECK_EQUAL( english.pluralize(1, "princess"), "princess" );
+    BOOST_CHECK_EQUAL( english.pluralize(1, "pony"), "pony" );
+    BOOST_CHECK_EQUAL( english.pluralize(1, "unicorn"), "unicorn" );
+
+    BOOST_CHECK_EQUAL( english.pluralize(2, "princess"), "princesses" );
+    BOOST_CHECK_EQUAL( english.pluralize(2, "pony"), "ponies" );
+    BOOST_CHECK_EQUAL( english.pluralize(2, "unicorn"), "unicorns" );
+
+    // pluralize (with number)
+    BOOST_CHECK_EQUAL( english.pluralize_with_number(1, "princess"), "1 princess" );
+    BOOST_CHECK_EQUAL( english.pluralize_with_number(1, "pony"), "1 pony" );
+    BOOST_CHECK_EQUAL( english.pluralize_with_number(1, "unicorn"), "1 unicorn" );
+
+    BOOST_CHECK_EQUAL( english.pluralize_with_number(2, "princess"), "2 princesses" );
+    BOOST_CHECK_EQUAL( english.pluralize_with_number(2, "pony"), "2 ponies" );
+    BOOST_CHECK_EQUAL( english.pluralize_with_number(2, "unicorn"), "2 unicorns" );
+
 }
 
 BOOST_AUTO_TEST_CASE( test_Inflector )

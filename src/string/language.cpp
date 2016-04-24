@@ -68,15 +68,15 @@ std::string English::pronoun_to3rd(const std::string& sentence,
     auto my = genitive(me);
 
     Inflector pronoun_swap ( {
-        {"you\\s+are",  you+" is"},
-        {"are\\s+you",  "is "+you},
+        {"you\\s+are",  you + " is"},
+        {"are\\s+you",  "is " + you},
         {"yourself",    "itself"},
         {"yours",       "its"},
         {"your",        "its"},
         {"you",         you},
 
-        {"thou\\s+art", you+" is"},
-        {"art\\s+thou", "is "+you},
+        {"thou\\s+art", you + " is"},
+        {"art\\s+thou", "is " + you},
         {"thyself",     "itself"},
         {"thine",       "its"},
         {"thy",         "its"},
@@ -84,7 +84,7 @@ std::string English::pronoun_to3rd(const std::string& sentence,
         {"thee",        you},
 
         {"am",          "is"},
-        {"I\'m",        me+" is"},
+        {"I\'m",        me + " is"},
         {"I",           me},
         {"me",          me},
         {"myself",      me},
@@ -100,13 +100,13 @@ std::string English::pronoun_1stto3rd(const std::string& sentence,
     auto my = genitive(me);
 
     Inflector pronoun_swap ( {
-        {"am",          "is"},
-        {"I\'m",        me+" is"},
-        {"I",           me},
-        {"me",          me},
-        {"myself",      me},
-        {"my",          my},
-        {"mine",        my},
+        {"am",     "is"},
+        {"I\'m",   me + " is"},
+        {"I",      me},
+        {"me",     me},
+        {"myself", me},
+        {"my",     my},
+        {"mine",   my},
     }, true );
     return pronoun_swap.inflect_all(sentence);
 
@@ -129,14 +129,12 @@ std::string English::pluralize(int number, const std::string& noun) const
 
 std::string English::pluralize_with_number(int number, const std::string& noun) const
 {
-    return std::to_string(number)+" "+pluralize(number,noun);
+    return std::to_string(number) + " " + pluralize(number,noun);
 }
 
 std::string English::indefinite_article(const std::string& subject) const
 {
-    auto it = std::find_if(subject.begin(), subject.end(),
-        [](char c){return std::isalpha(c);}
-    );
+    auto it = std::find_if(subject.begin(), subject.end(), (int (*)(int))std::isalpha);
     if ( it == subject.end() )
         return {};
 

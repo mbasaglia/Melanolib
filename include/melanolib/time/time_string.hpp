@@ -23,7 +23,7 @@
 
 #include "melanolib/time/date_time.hpp"
 #include "melanolib/string/language.hpp"
-#include "melanolib/string/stringutils.hpp"
+#include "melanolib/string/simple_stringutils.hpp"
 
 namespace melanolib {
 namespace time {

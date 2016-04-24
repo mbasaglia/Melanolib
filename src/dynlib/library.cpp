@@ -21,7 +21,7 @@
 
 #include "melanolib/dynlib/library.hpp"
 #include "library_name.hpp"
-#include "melanolib/string/stringutils.hpp"
+#include "melanolib/string/simple_stringutils.hpp"
 
 #if __has_include(<dlfcn.h>)
 #include <dlfcn.h>
