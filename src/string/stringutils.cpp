@@ -116,7 +116,7 @@ std::vector<std::string> char_split(const std::string& input,
     while (true)
     {
         auto next = std::find(begin, input.end(),separator);
-        if ( !skip_empty || next > begin+1 )
+        if ( !skip_empty || next > begin )
             out.emplace_back(begin,next);
         if ( next == input.end() )
             break;

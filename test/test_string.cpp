@@ -322,6 +322,9 @@ BOOST_AUTO_TEST_CASE( test_split )
     BOOST_CHECK( string::char_split("",':') == v{} );
     BOOST_CHECK( string::char_split("foo:",':') == v{"foo"} );
     BOOST_CHECK( string::char_split(":foo",':') == v{"foo"} );
+
+    v d123 = {"1", "2", "3"};
+    BOOST_CHECK( string::char_split("1.2.3",'.') == d123 );
 }
 
 BOOST_AUTO_TEST_CASE( test_similarity )
