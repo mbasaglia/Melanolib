@@ -119,7 +119,8 @@ public:
         {
             // Note: between P and T there could be years/months/weeks/days in duration
             scan();
-            duration = token_val<Duration>();
+            if ( lookahead.type == Token::TIME )
+                duration = token_val<Duration>();
         }
 
         // Read multiple number/unit pairs
@@ -399,15 +400,15 @@ private:
         static bool is_unit(const std::string& str)
         {
             if ( std::is_same<DurationT,weeks>::value )
-                return string::is_one_of(str,{"week","weeks","w"});
+                return string::is_one_of(str,{"week","weeks","w","W"});
             if ( std::is_same<DurationT,days>::value )
-                return string::is_one_of(str,{"day","days","d"});
+                return string::is_one_of(str,{"day","days","d","D"});
             if ( std::is_same<DurationT,hours>::value )
-                return string::is_one_of(str,{"hours","hour","h"});
+                return string::is_one_of(str,{"hours","hour","h","H"});
             if ( std::is_same<DurationT,minutes>::value )
-                return string::is_one_of(str,{"minutes","minute","m","min","'"});
+                return string::is_one_of(str,{"minutes","minute","m","min","'","M"});
             if ( std::is_same<DurationT,seconds>::value )
-                return string::is_one_of(str,{"seconds","second","s","\""});
+                return string::is_one_of(str,{"seconds","second","s","\"","S"});
             if ( std::is_same<DurationT,milliseconds>::value )
                 return string::is_one_of(str,{"milliseconds","millisecond","ms"});
             return false;

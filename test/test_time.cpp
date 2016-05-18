@@ -424,6 +424,7 @@ BOOST_AUTO_TEST_CASE( test_TimeParser )
     BOOST_CHECK( parse_duration("123\"") == seconds(123) );
     BOOST_CHECK( parse_duration("123 second") == seconds(123) );
     BOOST_CHECK( parse_duration("123 seconds") == seconds(123) );
+    BOOST_CHECK( parse_duration("PT123S") == seconds(123) );
 
     BOOST_CHECK( parse_duration("123m") == minutes(123) );
     BOOST_CHECK( parse_duration("123min") == minutes(123) );
