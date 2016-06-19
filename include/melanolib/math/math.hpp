@@ -229,6 +229,12 @@ constexpr inline bool fuzzy_compare(double a, double b, double max_error = 0.001
     return (abs(a - b) / (b == 0 ? 1 : b)) < max_error;
 }
 
+template<class T>
+    constexpr T linear_interpolation(const T& a, const T& b, double factor)
+{
+    return a * (1 - factor) + b * factor;
+}
+
 
 
 namespace detail {

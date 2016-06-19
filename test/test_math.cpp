@@ -193,3 +193,10 @@ BOOST_AUTO_TEST_CASE( test_bound )
     BOOST_CHECK(math::fuzzy_compare(math::bound(-5, 5.0, 5), 5));
     BOOST_CHECK(math::fuzzy_compare(math::bound(-5, 10.0, 5), 5));
 }
+
+BOOST_AUTO_TEST_CASE( test_linear_interpolation )
+{
+    BOOST_CHECK_EQUAL( math::linear_interpolation(3, 23, 0), 3 );
+    BOOST_CHECK_EQUAL( math::linear_interpolation(3, 23, 0.5), 13 );
+    BOOST_CHECK_EQUAL( math::linear_interpolation(3, 23, 1), 23 );
+}
