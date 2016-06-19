@@ -36,6 +36,8 @@ if (BUILD_TESTING)
     add_dependencies(test_dynlib dynlib_example)
     set_property(TARGET test_dynlib PROPERTY COMPILE_DEFINITIONS LIB_FILE="$<TARGET_FILE:dynlib_example>")
 
+    test_target(test_vector)
+
 else()
     message(STATUS "Test targets disabled")
 endif()
