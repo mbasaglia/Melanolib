@@ -252,6 +252,8 @@ public:
 template<class T>
     using Vec3 = Vector<T, 3>;
 
+using Vec3f = Vector<float, 3>;
+
 } // namespace math
 } // namespace melanolib
 #endif // MELANOLIB_MATH_VECTOR_HPP

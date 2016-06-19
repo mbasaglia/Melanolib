@@ -130,3 +130,11 @@ BOOST_AUTO_TEST_CASE( test_comparison )
     BOOST_CHECK(!(vec(1, 2) > vec(1, 2)));
     BOOST_CHECK(!(vec(1, 2) >= vec(10, 2)));
 }
+
+BOOST_AUTO_TEST_CASE( test_aliases )
+{
+    BOOST_CHECK_EQUAL(Vec3<int>().size(), 3);
+    BOOST_CHECK(typeid(Vec3<int>::value_type) == typeid(int));
+    BOOST_CHECK_EQUAL(Vec3f().size(), 3);
+    BOOST_CHECK(typeid(Vec3f::value_type) == typeid(float));
+}
