@@ -38,6 +38,8 @@ if (BUILD_TESTING)
 
     test_target(test_vector)
 
+    test_target(test_ordered_multimap)
+
 else()
     message(STATUS "Test targets disabled")
 endif()
