@@ -326,6 +326,11 @@ public:
         return count;
     }
 
+    void clear()
+    {
+        data.clear();
+    }
+
     void swap(OrderedMultimap& oth)
     {
         std::swap(data, oth.data);

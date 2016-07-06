@@ -220,6 +220,14 @@ BOOST_AUTO_TEST_CASE( test_erase_key )
     BOOST_CHECK( a == Map({{"bar", "2"}, {"baz", "3"}}) );
 }
 
+BOOST_AUTO_TEST_CASE( test_clear )
+{
+    using Map = OrderedMultimap<>;
+    Map a = {{"foo", "1"}, {"bar", "2"}, {"baz", "3"}, {"foo", "4"}};
+    a.clear();
+    BOOST_CHECK( a.empty() );
+}
+
 BOOST_AUTO_TEST_CASE( test_swap )
 {
     using Map = OrderedMultimap<>;
