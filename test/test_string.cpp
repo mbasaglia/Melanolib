@@ -575,6 +575,11 @@ BOOST_AUTO_TEST_CASE( test_QuickStream )
     BOOST_CHECK( match[1] == "123" );
     BOOST_CHECK( match[2] == "foo" );
     BOOST_CHECK( qs.eof() );
+
+    // get_remaining
+    qs.str("Hello world");
+    qs.ignore(6);
+    BOOST_CHECK( qs.get_remaining() == "world" );
 }
 
 BOOST_AUTO_TEST_CASE( test_pretty_bytes )

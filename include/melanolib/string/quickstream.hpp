@@ -188,6 +188,18 @@ public:
     }
 
     /**
+     * \brief Returns a string with all the remaining characters
+     */
+    string_type get_remaining()
+    {
+        if ( eof() )
+            return {};
+        auto old_pos = pos;
+        pos = source.size();
+        return source.substr(old_pos, pos);
+    }
+
+    /**
      * \brief Get a string, until \c delim
      *
      * \c delim is extracted but not inserted in the returned string
@@ -212,7 +224,7 @@ public:
         auto end = pos-begin;
         if ( !eof() && skip_match )
             pos++;
-        return source.substr(begin,end);
+        return source.substr(begin, end);
     }
 
     /**
