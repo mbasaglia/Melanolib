@@ -176,6 +176,18 @@ public:
     }
 
     /**
+     * \brief Ignore characher while \p predicate is true (or eof)
+     * \tparam Predicate    A predicate taking chars
+     * \param predicate     Termination condition
+     */
+    template<class Predicate>
+        void ignore_if(const Predicate& predicate) noexcept
+    {
+        while ( !eof() && predicate(source[pos]) )
+            pos++;
+    }
+
+    /**
      * \brief Get a string, until \c delim
      *
      * \c delim is extracted but not inserted in the returned string
@@ -186,7 +198,7 @@ public:
     }
 
     /**
-     * \brief Get a string, untile \p predicate is true (or eof)
+     * \brief Get a string, until \p predicate is true (or eof)
      * \tparam Predicate    A predicate taking chars
      * \param predicate     Termination condition
      * \param skip_match    If \c true, it will skip the first character for which \p predicate is \c true

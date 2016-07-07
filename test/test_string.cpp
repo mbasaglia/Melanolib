@@ -526,10 +526,14 @@ BOOST_AUTO_TEST_CASE( test_QuickStream )
     BOOST_CHECK( qs.peek() == 'b' );
     qs.ignore(10,'.');
     BOOST_CHECK( qs.peek() == 'j' );
+    qs.ignore_if(string::ascii::is_graph);
+    BOOST_CHECK( qs.peek() == ' ' );
+    qs.ignore_if(string::ascii::is_space);
+    BOOST_CHECK( qs.peek() == 'o' );
 
     // get_line
-    BOOST_CHECK( qs.get_line(' ') == "jumps" );
-    BOOST_CHECK( qs.get_line() == "over the lazy dog" );
+    BOOST_CHECK( qs.get_line(' ') == "over" );
+    BOOST_CHECK( qs.get_line() == "the lazy dog" );
     BOOST_CHECK( qs.eof() );
 
     // get_int
