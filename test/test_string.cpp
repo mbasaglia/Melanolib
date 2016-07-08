@@ -385,6 +385,8 @@ BOOST_AUTO_TEST_CASE( test_contains )
     BOOST_CHECK( string::contains_any("foo", "pony") );
     BOOST_CHECK( !string::contains_any("bar", "pony") );
     BOOST_CHECK( !string::contains_any("foo", "") );
+    BOOST_CHECK( string::contains("foo", string::ascii::is_lower) );
+    BOOST_CHECK( !string::contains("foo", string::ascii::is_upper) );
 }
 
 BOOST_AUTO_TEST_CASE( test_English )

@@ -217,6 +217,15 @@ inline bool contains_any(const std::string& subject, const std::string& characte
     return subject.find_first_of(characters) != std::string::npos;
 }
 
+/**
+ * \brief Whether \p subject contains \p c
+ */
+template<class Predicate>
+    inline bool contains(const std::string& subject, const Predicate& pred)
+{
+    return std::any_of(subject.begin(), subject.end(), pred);
+}
+
 } // namespace string
 } // namespace melanolib
 #endif // MELANOLIB_STRING_SIMPLE_STRINGUTILS_HPP
