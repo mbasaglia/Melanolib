@@ -25,6 +25,8 @@ if (BUILD_TESTING)
     endfunction(test_target)
 
     test_target(test_string melano_stringutils)
+    test_target(test_trie)
+    test_target(test_ascii)
     test_target(test_time melano_time)
     test_target(test_geo)
     test_target(test_gsl)
