@@ -201,6 +201,22 @@ inline std::string trimmed(const std::string& subject)
     return trimmed(subject, (int (*)(int))std::isspace);
 }
 
+/**
+ * \brief Whether \p subject contains \p c
+ */
+inline bool contains(const std::string& subject, char c)
+{
+    return subject.find(c) != std::string::npos;
+}
+
+/**
+ * \brief Whether \p subject contains any of the characters in \p characters
+ */
+inline bool contains_any(const std::string& subject, const std::string& characters)
+{
+    return subject.find_first_of(characters) != std::string::npos;
+}
+
 } // namespace string
 } // namespace melanolib
 #endif // MELANOLIB_STRING_SIMPLE_STRINGUTILS_HPP

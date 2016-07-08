@@ -378,6 +378,15 @@ BOOST_AUTO_TEST_CASE( test_is_one_of )
     BOOST_CHECK( !string::is_one_of("foo",{}) );
 }
 
+BOOST_AUTO_TEST_CASE( test_contains )
+{
+    BOOST_CHECK( string::contains("foo", 'f') );
+    BOOST_CHECK( !string::contains("foo", 'g') );
+    BOOST_CHECK( string::contains_any("foo", "pony") );
+    BOOST_CHECK( !string::contains_any("bar", "pony") );
+    BOOST_CHECK( !string::contains_any("foo", "") );
+}
+
 BOOST_AUTO_TEST_CASE( test_English )
 {
     using string::english;
