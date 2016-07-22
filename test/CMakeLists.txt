@@ -42,6 +42,8 @@ if (BUILD_TESTING)
 
     test_target(test_ordered_multimap)
 
+    test_target(test_movable)
+
 else()
     message(STATUS "Test targets disabled")
 endif()
