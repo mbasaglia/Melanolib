@@ -128,8 +128,8 @@ template<class Return=int, class Argument=double>
 /**
  * \brief (Stable) maximum between two values
  */
-template<class T>
-    inline constexpr T max(T&& a, T&& b)
+template<class T, class U>
+    inline constexpr T max(T&& a, U&& b)
     {
         return a < b ? b : a;
     }
@@ -138,7 +138,7 @@ template<class T>
  * \brief (Stable) maximum among several values
  */
 template<class T, class...Ts>
-    inline constexpr T max(T&& a,  Ts&&... b)
+    inline constexpr T max(T&& a, Ts&&... b)
     {
         return max(std::forward<T>(a), max(std::forward<Ts>(b)...));
     }
@@ -146,8 +146,8 @@ template<class T, class...Ts>
 /**
  * \brief (Stable) minimum between two values
  */
-template<class T>
-    inline constexpr T min(T&& a, T&& b)
+template<class T, class U>
+    inline constexpr T min(T&& a, U&& b)
     {
         return !(b < a) ? a : b;
     }
