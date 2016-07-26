@@ -35,10 +35,18 @@ namespace melanolib {
  * \param  args     Function arguments
  */
 template<class Functor, class... CallArgs>
-    void callback(const Functor& function, CallArgs&&... args)
+    std::enable_if_t<std::is_convertible<Functor, bool>::value>
+    callback(const Functor& function, CallArgs&&... args)
     {
         if ( function )
             function(std::forward<CallArgs>(args)...);
+    }
+
+template<class Functor, class... CallArgs>
+    std::enable_if_t<!std::is_convertible<Functor, bool>::value>
+    callback(const Functor& function, CallArgs&&... args)
+    {
+        function(std::forward<CallArgs>(args)...);
     }
 
 /**
@@ -72,6 +80,25 @@ template<class Return, class Range, class... Args>
     {
         return range_call(functor, std::forward<Range>(range), std::forward<Args>(args)...);
     }
+
+struct Noop
+{
+    constexpr Noop(){}
+
+    template<class... Args>
+        constexpr void operator()(Args&&... args) const
+        {
+        }
+
+    constexpr explicit operator bool() const
+    {
+        return false;
+    }
+    constexpr bool operator!() const
+    {
+        return true;
+    }
+};
 
 } // namespace melanolib
 #endif // FUNCTIONAL_HPP
