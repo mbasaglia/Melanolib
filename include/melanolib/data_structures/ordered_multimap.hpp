@@ -314,6 +314,16 @@ public:
 //         return data.erase(std::forward<Args>(args)...);
 //     }
 
+    iterator erase(const iterator& begin, const iterator& end)
+    {
+        return data.erase(begin, end);
+    }
+
+    iterator erase(const iterator& pos)
+    {
+        return data.erase(pos);
+    }
+
     size_type erase(const key_type& key)
     {
         auto last = std::remove_if(begin(), end(),
