@@ -28,19 +28,54 @@
 
 namespace melanolib {
 
+template<class Class, class Return=void, class... Arg>
+    class MethodCaller
+    {
+    public:
+        using FunctionPtr = Return (Class::*)(Arg...);
+
+        MethodCaller(Class* object, FunctionPtr function)
+            : object(object), function(function)
+        {}
+
+        template<class... Args>
+            Return operator()(Args&&... args) const
+        {
+            return (object->*function)(std::forward<Args>(args)...);
+        }
+
+    private:
+        Class* object;
+        FunctionPtr function;
+    };
+
+template<class Class, class Return=void>
+    using ServiceMethodCaller = MethodCaller<Class, Return, std::unique_lock<std::mutex>&>;
+
 /**
- * \brief Base class for services/daemons
+ * \brief Utility class for services/daemons
  */
-class ServiceBase
+template<class OnStart, class OnStop, class Loop>
+class Service
 {
 public:
-    ServiceBase() : should_run(false) {}
+    Service(
+        OnStart on_start,
+        OnStop on_stop,
+        Loop loop
+    ) : should_run(false),
+        on_start(std::move(on_start)),
+        on_stop(std::move(on_stop)),
+        loop(std::move(loop))
+    {}
 
-    /**
-     * \note Derived class destructors should call stop()
-     * It isn't called here because run() calls virtual functions
-     */
-    virtual ~ServiceBase() {}
+    Service(const Service&) = delete;
+    Service& operator=(const Service&) = delete;
+
+    ~Service()
+    {
+        stop();
+    }
 
     /**
      * \brief Starts the service in a background thread.
@@ -78,10 +113,8 @@ public:
             auto guard = lock();
             should_run = false;
             on_stop(guard);
-            if ( !guard.owns_lock() )
-                guard.lock();
-            condition.notify_all();
             guard.unlock();
+            condition_variable.notify_all();
             if ( thread.joinable() )
             {
                 thread.join();
@@ -120,18 +153,6 @@ public:
         return thread.joinable() || should_run;
     }
 
-protected:
-    /**
-     * \brief Main loop for the service.
-     *
-     * The defaul implementation locks the condition variable while
-     * wait_condition() returns true, then it calls action() and stops
-     * after stop() is called
-     */
-    virtual void loop(std::unique_lock<std::mutex>& lock) = 0;
-    virtual void on_start(std::unique_lock<std::mutex>& lock) {}
-    virtual void on_stop(std::unique_lock<std::mutex>& lock) {}
-
     /**
      * \brief Returns a lock to the internal mutex
      */
@@ -140,18 +161,43 @@ protected:
         return std::unique_lock<std::mutex>{mutex};
     }
 
-    std::thread thread;
-    std::condition_variable condition;
-    std::mutex mutex;
+    std::condition_variable& condition()
+    {
+        return condition_variable;
+    }
+
+protected:
     std::atomic<bool> should_run;
+
+private:
+    std::thread thread;
+    std::condition_variable condition_variable;
+    std::mutex mutex;
+    OnStart on_start;
+    OnStop on_stop;
+    Loop loop;
 };
 
 /**
- * \brief Base class for services/daemons that use a condition variable and loop
+ * \brief Utility class for services/daemons that use a condition variable and loop
  */
-class Service : public ServiceBase
+template<class OnStart, class OnStop, class Action, class WaitCondition>
+class LoopService : public Service<OnStart, OnStop,
+    ServiceMethodCaller<LoopService<OnStart, OnStop, Action, WaitCondition>>>
 {
-protected:
+public:
+    LoopService(
+        OnStart on_start,
+        OnStop on_stop,
+        Action action,
+        WaitCondition wait_condition
+    ) :  Service<OnStart, OnStop,
+    ServiceMethodCaller<LoopService<OnStart, OnStop, Action, WaitCondition>>>(std::move(on_start), std::move(on_stop), {this, &LoopService::loop}),
+        action(std::move(action)),
+        wait_condition(std::move(wait_condition))
+    {}
+
+private:
     /**
      * \brief Main loop for the service.
      *
@@ -159,37 +205,36 @@ protected:
      * wait_condition() returns true, then it calls action() and stops
      * after stop() is called
      */
-    virtual void loop(std::unique_lock<std::mutex>& lock)
+    void loop(std::unique_lock<std::mutex>& lock)
     {
-        while( should_run )
+        while( this->should_run )
         {
-            while ( wait_condition() && should_run )
+            while ( wait_condition() )
             {
-                condition.wait(lock);
-            }
+                this->condition().wait(lock);
+//                 condition.wait_for(lock, std::chrono::seconds(5));
 
-            if ( !should_run )
-                return;
+                if ( !this->should_run )
+                    return;
+            }
 
             action(lock);
         }
     }
 
     /**
-     * \brief Condition for the condition_variable
-     */
-    virtual bool wait_condition()
-    {
-        return false;
-    }
-
-    /**
      * \brief Action to perform at every loop() iteration
      */
-    virtual void action(std::unique_lock<std::mutex>& lock) = 0;
+    Action action;
 
-    std::condition_variable condition;
+    /**
+     * \brief Condition for the condition_variable
+     */
+    WaitCondition wait_condition;
 };
+
+template<class Class>
+using CallerService = Service<ServiceMethodCaller<Class>, ServiceMethodCaller<Class>, ServiceMethodCaller<Class>>;
 
 } // namespace melanolib
 #endif // MELANOLIB_UTILS_SERVICE_HPP
