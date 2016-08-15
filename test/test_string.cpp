@@ -432,3 +432,11 @@ BOOST_AUTO_TEST_CASE( test_pretty_bytes )
     BOOST_CHECK(string::pretty_bytes(1025) == "1.0 KB");
     BOOST_CHECK(string::pretty_bytes(1048576) == "1.0 MB");
 }
+
+BOOST_AUTO_TEST_CASE( test_slug )
+{
+    BOOST_CHECK ( string::slug("pony") == "pony" );
+    BOOST_CHECK ( string::slug("  pony  ") == "pony" );
+    BOOST_CHECK ( string::slug("pony princess") == "pony_princess" );
+    BOOST_CHECK ( string::slug("Pony") == "pony" );
+}

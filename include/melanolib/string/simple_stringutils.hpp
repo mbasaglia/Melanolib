@@ -30,6 +30,7 @@
 #include <unordered_map>
 
 #include "trie.hpp"
+#include "ascii.hpp"
 
 namespace melanolib {
 namespace string {
@@ -97,7 +98,7 @@ inline bool ends_with(const std::string& haystack, const std::string& suffix)
  */
 inline std::string strtolower ( std::string string )
 {
-    std::transform(string.begin(),string.end(),string.begin(), (int(*)(int))std::tolower);
+    std::transform(string.begin(),string.end(),string.begin(), ascii::to_lower);
     return string;
 }
 
@@ -106,7 +107,7 @@ inline std::string strtolower ( std::string string )
  */
 inline std::string strtoupper ( std::string string )
 {
-    std::transform(string.begin(),string.end(),string.begin(), (int(*)(int))std::toupper);
+    std::transform(string.begin(),string.end(),string.begin(), ascii::to_upper);
     return string;
 }
 
@@ -160,7 +161,7 @@ inline bool is_one_of(const std::string& string, const std::initializer_list<std
 inline bool icase_equal(const std::string& a, const std::string& b) noexcept
 {
     return std::equal(a.begin(), a.end(), b.begin(), b.end(),
-                      [](char l, char r) { return std::tolower(l) == std::tolower(r); });
+        [](char l, char r) { return ascii::to_lower(l) == ascii::to_lower(r); });
 }
 
 /**
@@ -198,7 +199,7 @@ template<class Predicate>
  */
 inline std::string trimmed(const std::string& subject)
 {
-    return trimmed(subject, (int (*)(int))std::isspace);
+    return trimmed(subject, ascii::is_space);
 }
 
 /**
@@ -224,6 +225,21 @@ template<class Predicate>
     inline bool contains(const std::string& subject, const Predicate& pred)
 {
     return std::any_of(subject.begin(), subject.end(), pred);
+}
+
+/**
+ * \brief Transforms a string into a machine-friendly slug
+ *
+ * Trims spaces, turns uppercase to lowercase and replaces spaces with underscores.
+ */
+inline std::string slug(std::string subject)
+{
+    subject = trimmed(subject);
+    std::transform(
+        subject.begin(), subject.end(), subject.begin(),
+        [](char c) { return ascii::is_space(c) ? '_' : ascii::to_lower(c); }
+    );
+    return subject;
 }
 
 } // namespace string
