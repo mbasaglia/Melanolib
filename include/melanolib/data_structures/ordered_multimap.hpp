@@ -405,16 +405,17 @@ public:
     /**
      * \brief Returns the first occurence of a header with the given name
      *
-     * If no header is found, returns the empty string
+     * If no item is found, returns a default value
      */
-    std::string get(const key_type& key) const
+    std::string get(const key_type& key, const mapped_type& default_value = {}) const
     {
         for( const auto& item : data )
         {
             if ( compare.key(item.first, key) )
                 return item.second;
         }
-        return "";
+        
+        return default_value;
     }
 
     /**
