@@ -35,7 +35,7 @@ namespace melanolib {
  * \param  args     Function arguments
  */
 template<class Functor, class... CallArgs>
-    std::enable_if_t<std::is_convertible<Functor, bool>::value>
+    std::enable_if_t<std::is_convertible<decltype((bool)std::declval<Functor>()), bool>::value>
     callback(const Functor& function, CallArgs&&... args)
     {
         if ( function )
@@ -43,7 +43,7 @@ template<class Functor, class... CallArgs>
     }
 
 template<class Functor, class... CallArgs>
-    std::enable_if_t<!std::is_convertible<Functor, bool>::value>
+    std::enable_if_t<!std::is_convertible<decltype((bool)std::declval<Functor>()), bool>::value>
     callback(const Functor& function, CallArgs&&... args)
     {
         function(std::forward<CallArgs>(args)...);
