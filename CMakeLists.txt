@@ -21,7 +21,7 @@ project(MelanoLib CXX)
 set(PROJECT_VERSION 0.1)
 
 # CMake modules
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(misc)
 
 # Check C++14
