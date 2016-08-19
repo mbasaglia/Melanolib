@@ -20,25 +20,13 @@ cmake_minimum_required(VERSION 2.6)
 project(MelanoLib CXX)
 set(PROJECT_VERSION 0.1)
 
+# CMake modules
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(misc)
+
 # Check C++14
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-if(${CMAKE_VERSION} LESS 3.2)
-    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR CMAKE_COMPILER_IS_GNUCXX)
-        include(CheckCXXCompilerFlag)
-        check_cxx_compiler_flag(--std=c++${CMAKE_CXX_STANDARD} STD_CXX)
-        if(STD_CXX)
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++${CMAKE_CXX_STANDARD}")
-        else()
-            message(SEND_ERROR "Requires C++${CMAKE_CXX_STANDARD} or better")
-        endif()
-    else()
-        message(WARNING "Unrecognized compiler: ${CMAKE_CXX_COMPILER_ID}, make sure it supports C++${CMAKE_CXX_STANDARD}")
-    endif()
-endif()
+use_cxx_standard(14)
 
 # Flags
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -pedantic -Werror")
@@ -51,5 +39,17 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/include)
 add_subdirectory(src)
 
-include(testing.cmake)
+include(testing)
 add_subdirectory(test)
+
+
+# Doxygen target
+# Find all sources for documentation and stuff
+set(ALL_SOURCE_DIRECTORIES src include)
+
+find_sources(ALL_SOURCES *.cpp *.hpp)
+set(DOXYGEN_FOUND ON)
+find_package(Doxygen QUIET)
+if(DOXYGEN_FOUND)
+    create_doxygen_target(doc)
+endif(DOXYGEN_FOUND)
