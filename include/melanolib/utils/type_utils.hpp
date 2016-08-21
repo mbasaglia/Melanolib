@@ -109,5 +109,17 @@ template<class T>
     struct StringConvertible : std::is_convertible<T, std::string>
     {};
 
+
+/**
+ * \brief Type that inherits from \c std::true_type or \c std::false_type
+ *        based on whether \p Source can be converted to \c Target
+ *        with an explicit (or implicit) conversion.
+ */
+template <class Source, class Target>
+struct ExplicitlyConvertible : public std::is_constructible<Target, Source>
+{
+};
+
+
 } // namespace melanolib
 #endif // MELANOLIB_TYPE_UTILS_HPP

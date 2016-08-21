@@ -39,10 +39,9 @@ if (BUILD_TESTING)
     set_property(TARGET test_dynlib PROPERTY COMPILE_DEFINITIONS LIB_FILE="$<TARGET_FILE:dynlib_example>")
 
     test_target(test_vector)
-
     test_target(test_ordered_multimap)
-
     test_target(test_movable)
+    test_target(test_type_utils)
 
 else()
     message(STATUS "Test targets disabled")

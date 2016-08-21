@@ -16,7 +16,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#define BOOST_TEST_MODULE Test_Math
+#define BOOST_TEST_MODULE Test_Vector
 
 #include <boost/test/unit_test.hpp>
 
