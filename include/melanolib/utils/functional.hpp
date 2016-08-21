@@ -35,7 +35,7 @@ namespace melanolib {
  * \param  args     Function arguments
  */
 template<class Functor, class... CallArgs>
-    std::enable_if_t<ExplicitlyConvertible<Functor>, bool>::value>
+    std::enable_if_t<ExplicitlyConvertible<Functor, bool>::value>
     callback(const Functor& function, CallArgs&&... args)
     {
         if ( function )
