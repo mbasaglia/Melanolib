@@ -56,6 +56,14 @@ using std::acosh;
 using std::atanh;
 
 /**
+ * \brief Logarithm of an arbotrary base
+ */
+inline long double log(long double arg, long double base)
+{
+    return log(arg) / log(base);
+}
+
+/**
  * \brief Truncates a number (rounds towards zero)
  * \tparam Return   Return type (Must be an integral type)
  * \tparam Argument Argument type (Must be a floating point type)
