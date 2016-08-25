@@ -53,7 +53,10 @@ BOOST_AUTO_TEST_CASE( test_printf_int )
     BOOST_CHECK_EQUAL( format::sprintf("%X", 123), "7B" );
     BOOST_CHECK_EQUAL( format::sprintf("%o", 123), "173" );
 
+    BOOST_CHECK_EQUAL( format::sprintf("%#b", 123), "0b1111011" );
     BOOST_CHECK_EQUAL( format::sprintf("%#x", 123), "0x7b" );
+    BOOST_CHECK_EQUAL( format::sprintf("%#o", 123), "0o173" );
+    BOOST_CHECK_EQUAL( format::sprintf("%#d", 123), "123" );
 
     BOOST_CHECK_EQUAL( format::sprintf("%6d",   -123), "  -123" );
     BOOST_CHECK_EQUAL( format::sprintf("%06d",  -123), "-00123" );
