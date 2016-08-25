@@ -68,6 +68,52 @@ struct FormatSpec
     static FormatSpec parse(QuickStream& stream);
 };
 
+namespace detail {
+void pad_num(const FormatSpec& spec, const std::string& prefix,
+             const std::string& mantissa, std::ostream& out);
+
+template<class Float>
+    int extract_exponent(Float value, int base)
+    {
+        if ( value == 0 )
+            return 0;
+        return math::ceil(math::log(value, base));
+    }
+
+template<class Float>
+    std::string extract_digits(Float value, std::size_t precision, int exponent)
+{
+    static const int base = 10;
+    std::string mantissa;
+    Float q = value / math::pow(base, exponent);
+    int digit = 0;
+    for ( std::size_t i = 0; i < precision + math::max(1, exponent); i++ )
+    {
+        Float scaled = q * base;
+        digit = math::floor(scaled);
+        q = scaled - digit;
+        mantissa += '0' + digit;
+    }
+
+    if ( digit >= 5 )
+    {
+        for ( auto it = mantissa.rbegin(); it != mantissa.rend(); ++it )
+        {
+            *it += 1;
+            if ( *it > '9' )
+                *it = '0';
+            else
+                break;
+        }
+    }
+    return mantissa;
+}
+
+void format_body(char format, const std::string& mantissa,
+                 std::size_t precision, int exponent, std::string& body);
+
+} // namespace detail
+
 template<class T>
     std::enable_if_t<!std::is_arithmetic<std::remove_reference_t<T>>::value, bool>
     format(const FormatSpec& spec, T&& value, std::ostream& out)
@@ -78,8 +124,6 @@ template<class T>
 bool format(const FormatSpec& spec, long long value, std::ostream& out);
 
 bool format(const FormatSpec& spec, unsigned long long value, std::ostream& out);
-
-bool format(const FormatSpec& spec, long double value, std::ostream& out);
 
 template<class T>
     std::enable_if_t<
@@ -100,11 +144,69 @@ template<class T>
 {
     return format(spec, (long long)value, out);
 }
-template<class T>
-    std::enable_if_t<std::is_floating_point<std::remove_reference_t<T>>::value, bool>
-    format(const FormatSpec& spec, T value, std::ostream& out)
+
+template<class Float>
+    std::enable_if_t<std::is_floating_point<std::remove_reference_t<Float>>::value, bool>
+    format(const FormatSpec& spec, Float value, std::ostream& out)
 {
-    return format(spec, (long double)value, out);
+    if ( spec.format == 'd' || spec.format == 'i' || spec.format == 'o' ||
+         spec.format == 'b' || spec.format == 'x' || spec.format == 'X' )
+    {
+        if ( value < 0 )
+            return format(spec, (long long)value, out);
+        return format(spec, (unsigned long long)value, out);
+    }
+
+    char fmt = ascii::to_lower(spec.format);
+    if ( fmt != 'e' && fmt != 'g' && fmt != 'f' && fmt != 'n' && fmt != '%' )
+        return false;
+
+    bool negative = false;
+    std::string body;
+    std::string suffix;
+
+    if ( fmt == '%' )
+    {
+        suffix = "%";
+        fmt = 'f';
+        value *= 100;
+    }
+
+    if ( std::isnan(value) )
+    {
+        body = "NaN";
+    }
+    else if ( std::isinf(value) )
+    {
+        body = "Inf";
+        negative = value < 0;
+    }
+    else
+    {
+        if ( value < 0 )
+        {
+            negative = true;
+            value = -value;
+        }
+
+        int exponent = detail::extract_exponent(value, 10);
+        std::size_t precision = spec.precision;
+        if ( precision == std::numeric_limits<std::size_t>::max() )
+            precision = 6;
+        std::string mantissa = detail::extract_digits(value, precision, exponent);
+        detail::format_body(spec.format, mantissa, precision, exponent, body);
+    }
+
+    std::string prefix;
+    if ( negative )
+        prefix = "-";
+    else if ( spec.positive_sign == FormatSpec::PositiveSign::Plus )
+        prefix = "+";
+    else if ( spec.positive_sign == FormatSpec::PositiveSign::Space )
+        prefix = " ";
+
+    detail::pad_num(spec, prefix, body+suffix, out);
+    return true;
 }
 
 bool format(const FormatSpec& spec, std::string value, std::ostream& out);

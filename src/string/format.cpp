@@ -115,6 +115,8 @@ FormatSpec FormatSpec::parse(QuickStream& stream)
         else
         {
             out.precision = 0;
+            if ( stream.peek_back() != '.' )
+                stream.unget();
         }
         next_char = stream.next();
         if ( next_char == eof )
@@ -182,8 +184,9 @@ static bool get_int_base(const FormatSpec& spec, int& base, std::string& prefix)
     return true;
 }
 
-static void pad_int(const FormatSpec& spec, const std::string& prefix,
-                    const std::string& mantissa, std::ostream& out)
+namespace detail {
+void pad_num(const FormatSpec& spec, const std::string& prefix,
+             const std::string& mantissa, std::ostream& out)
 {
     std::string padding;
     auto string_length = mantissa.size() + prefix.size();
@@ -199,6 +202,77 @@ static void pad_int(const FormatSpec& spec, const std::string& prefix,
     else
         out << padding << prefix << mantissa;
 }
+
+void format_body(char format, const std::string& mantissa,
+                 std::size_t precision, int exponent, std::string& body)
+{
+    char fmt = std::tolower(format);
+    bool showfrac = true;
+    exponent -= 1;
+
+    if ( fmt == 'g' || fmt == 'n' )
+    {
+        if ( -4 <= exponent && exponent < int(precision) )
+            fmt = 'f';
+        else
+            fmt = 'e';
+
+        auto last_nonzero = mantissa.find_last_not_of('0');
+        if ( last_nonzero == std::string::npos )
+        {
+            showfrac = false;
+        }
+        else if ( last_nonzero + 1 < precision )
+        {
+            precision = last_nonzero + 1;
+            if ( int(last_nonzero) <= exponent || (fmt == 'e' && last_nonzero == 0) )
+                showfrac = false;
+        }
+    }
+
+    if ( fmt == 'e' )
+    {
+        body.push_back(mantissa[0]);
+        if ( showfrac )
+        {
+            body.push_back('.');
+            body += mantissa.substr(1, precision);
+        }
+        body.push_back(ascii::is_upper(format) ? 'E' : 'e');
+        if ( exponent < 10 && exponent >= 0 )
+        {
+            body += '0';
+            body += exponent + '0';
+        }
+        else if ( exponent > -10 && exponent < 0 )
+        {
+            body += "-0";
+            body += -exponent + '0';
+        }
+        else
+        {
+            body += std::to_string(exponent);
+        }
+    }
+    else
+    {
+        exponent += 1;
+        if ( exponent > 0 )
+        {
+            body += mantissa.substr(0, exponent);
+        }
+        else
+        {
+            exponent = 0;
+            body.push_back('0');
+        }
+
+        if ( showfrac && mantissa.size() > std::size_t(exponent) )
+            body += "." + mantissa.substr(exponent, precision);
+    }
+}
+
+} // namespace detail
 
 bool format(const FormatSpec& spec, long long value, std::ostream& out)
 {
@@ -226,7 +300,7 @@ bool format(const FormatSpec& spec, long long value, std::ostream& out)
         return false;
 
     std::string mantissa = ull_to_string(value, base, ascii::is_upper(spec.format));
-    pad_int(spec, prefix, mantissa, out);
+    detail::pad_num(spec, prefix, mantissa, out);
 
     return true;
 }
@@ -249,7 +323,7 @@ bool format(const FormatSpec& spec, unsigned long long value, std::ostream& out)
         return false;
 
     std::string mantissa = ull_to_string(value, base, ascii::is_upper(spec.format));
-    pad_int(spec, prefix, mantissa, out);
+    detail::pad_num(spec, prefix, mantissa, out);
 
     return true;
 }
@@ -275,87 +349,6 @@ bool format(const FormatSpec& spec, std::string value, std::ostream& out)
         out << value << padding;
 
     return true;
-}
-
-bool format(const FormatSpec& spec, long double value, std::ostream& out)
-{
-    if ( spec.format == 'd' || spec.format == 'n' || spec.format == 'i' ||
-         spec.format == 'o' || spec.format == 'b' || spec.format == 'x' ||
-         spec.format == 'X' )
-    {
-        if ( value < 0 )
-            return format(spec, (long long)value, out);
-        return format(spec, (unsigned long long)value, out);
-    }
-    char fmt = ascii::to_lower(spec.format);
-    if ( fmt != 'e' && fmt != 'g' && fmt != 'f' && fmt != '%' )
-        return false;
-
-    /// \todo % format
-
-    auto precision = out.precision();
-    if ( spec.precision != std::numeric_limits<std::size_t>::max() )
-        out.precision(spec.precision);
-    else
-        out.precision(6);
-
-    auto width = out.width();
-    out.width(spec.width);
-
-    auto fill = out.fill();
-    out.fill(spec.fill_char);
-
-    auto flags = out.flags();
-
-    if ( ascii::is_upper(spec.format) )
-        out.setf(std::ios::uppercase);
-    else
-        out.unsetf(std::ios::uppercase);
-
-    if ( fmt == 'f' )
-        out.setf(std::ios::fixed, std::ios::floatfield);
-    else if ( fmt == 'e' )
-        out.setf(std::ios::scientific, std::ios::floatfield);
-    else if ( fmt == 'g' )
-        out.unsetf(std::ios::floatfield);
-
-    switch ( spec.alignment )
-    {
-        case FormatSpec::Alignment::Center:
-            /// \todo
-            break;
-        case FormatSpec::Alignment::Left:
-            out.setf(std::ios::left, std::ios::adjustfield);
-            break;
-        case FormatSpec::Alignment::Default:
-        case FormatSpec::Alignment::Right:
-            out.setf(std::ios::right, std::ios::adjustfield);
-            break;
-        case FormatSpec::Alignment::Sign:
-            out.setf(std::ios::internal, std::ios::adjustfield);
-            break;
-    }
-
-    switch ( spec.positive_sign )
-    {
-        case FormatSpec::PositiveSign::None:
-            out.unsetf(std::ios::showpos);
-            break;
-        case FormatSpec::PositiveSign::Plus:
-            out.setf(std::ios::showpos);
-            break;
-        case FormatSpec::PositiveSign::Space:
-            /// \todo
-            break;
-    }
-
-    out << value;
-
-    out.flags(flags);
-    out.fill(fill);
-    out.width(width);
-    out.precision(precision);
-    return !out.fail();
 }
 
 } // namespace format
