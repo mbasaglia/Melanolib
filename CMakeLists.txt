@@ -29,7 +29,7 @@ message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}
 use_cxx_standard(14)
 
 # Flags
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -pedantic -Werror")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -pedantic -Werror --coverage")
 
 # Enable Debug by default, can be changed with -D CMAKE_BUILD_TYPE=Release
 if(CMAKE_BUILD_TYPE STREQUAL "")
@@ -39,6 +39,9 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/include)
 add_subdirectory(src)
 
+# Tests
+set(LCOV_SOURCE_BASE_DIR "${CMAKE_SOURCE_DIR}")
+set(LCOV_REMOVE_PATTERN "test/*.cpp")
 include(testing)
 add_subdirectory(test)
 
