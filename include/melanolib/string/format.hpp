@@ -81,9 +81,8 @@ template<class Float>
     }
 
 template<class Float>
-    std::string extract_digits(Float value, std::size_t precision, int exponent)
+    std::string extract_digits(Float value, int base, std::size_t precision, int exponent)
 {
-    static const int base = 10;
     std::string mantissa;
     Float q = value / math::pow(base, exponent);
     int digit = 0;
@@ -189,11 +188,12 @@ template<class Float>
             value = -value;
         }
 
-        int exponent = detail::extract_exponent(value, 10);
+        static const int base = 10;
+        int exponent = detail::extract_exponent(value, base);
         std::size_t precision = spec.precision;
         if ( precision == std::numeric_limits<std::size_t>::max() )
             precision = 6;
-        std::string mantissa = detail::extract_digits(value, precision, exponent);
+        std::string mantissa = detail::extract_digits(value, base, precision, exponent);
         detail::format_body(spec.format, mantissa, precision, exponent, body);
     }
 
