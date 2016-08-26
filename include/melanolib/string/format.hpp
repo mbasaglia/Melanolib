@@ -117,7 +117,7 @@ template<class T>
     std::enable_if_t<!std::is_arithmetic<std::remove_reference_t<T>>::value, bool>
     format(const FormatSpec& spec, T&& value, std::ostream& out)
 {
-    return false;
+    return !!(out << std::forward<T>(value));
 }
 
 bool format(const FormatSpec& spec, long long value, std::ostream& out);

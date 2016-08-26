@@ -173,3 +173,16 @@ BOOST_AUTO_TEST_CASE( test_printf_float_f )
     BOOST_CHECK_EQUAL( format::sprintf("%f", 0.3), "0.300000" );
     BOOST_CHECK_EQUAL( format::sprintf("%f", 3), "3.000000" );
 }
+
+struct SomeClass
+{
+    friend std::ostream& operator<<(std::ostream& os, const SomeClass&)
+    {
+        return os << "SomeClass";
+    }
+};
+
+BOOST_AUTO_TEST_CASE( test_printf_custom_default )
+{
+    BOOST_CHECK_EQUAL( format::sprintf("%s", SomeClass{}), "SomeClass" );
+}
