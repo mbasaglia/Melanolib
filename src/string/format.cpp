@@ -127,62 +127,6 @@ FormatSpec FormatSpec::parse(QuickStream& stream)
     return out;
 }
 
-static std::string ull_to_string(unsigned long long value, int base, bool caps)
-{
-    if ( value == 0 )
-        return "0";
-    std::string result;
-    result.reserve(math::ceil(math::log(value, base)));
-    while ( value )
-    {
-        char digit = value % base;
-        if ( digit < 10 )
-            digit += '0';
-        else if ( caps )
-            digit += 'A' - 10;
-        else
-            digit += 'a' - 10;
-
-        result.push_back(digit);
-        value /= base;
-    }
-
-    std::reverse(result.begin(), result.end());
-
-    return result;
-}
-
-static bool get_int_base(const FormatSpec& spec, int& base, std::string& prefix)
-{
-    if ( spec.format == 'd' || spec.format == 'n' ||
-         spec.format == ' ' || spec.format == 'i' )
-    {
-        base = 10;
-    }
-    else if ( spec.format == 'b' )
-    {
-        if ( spec.base_prefix )
-            prefix += "0b";
-        base = 2;
-    }
-    else if ( spec.format == 'o' )
-    {
-        if ( spec.base_prefix )
-            prefix += "0o";
-        base = 8;
-    }
-    else if ( spec.format == 'x' || spec.format == 'X' )
-    {
-        if ( spec.base_prefix )
-            prefix += "0x";
-        base = 16;
-    }
-    else
-    {
-        return false;
-    }
-    return true;
-}
 
 namespace detail {
 void pad_num(const FormatSpec& spec, const std::string& prefix,
@@ -272,61 +216,39 @@ void format_body(char format, const std::string& mantissa,
     }
 }
 
+bool get_int_base(const FormatSpec& spec, int& base, std::string& prefix)
+{
+    if ( spec.format == 'd' || spec.format == 'n' ||
+         spec.format == ' ' || spec.format == 'i' )
+    {
+        base = 10;
+    }
+    else if ( spec.format == 'b' )
+    {
+        if ( spec.base_prefix )
+            prefix += "0b";
+        base = 2;
+    }
+    else if ( spec.format == 'o' )
+    {
+        if ( spec.base_prefix )
+            prefix += "0o";
+        base = 8;
+    }
+    else if ( spec.format == 'x' || spec.format == 'X' )
+    {
+        if ( spec.base_prefix )
+            prefix += "0x";
+        base = 16;
+    }
+    else
+    {
+        return false;
+    }
+    return true;
+}
+
 } // namespace detail
-
-bool format(const FormatSpec& spec, long long value, std::ostream& out)
-{
-    char fmt = ascii::to_lower(spec.format);
-    if ( fmt == 'e' || fmt == 'g' || fmt == 'f' || fmt == '%' )
-        return format(spec, (long double)value, out);
-
-    std::string prefix;
-    if ( value < 0 )
-    {
-        prefix = "-";
-        value = -value;
-    }
-    else if ( spec.positive_sign == FormatSpec::PositiveSign::Plus )
-    {
-        prefix = "+";
-    }
-    else if ( spec.positive_sign == FormatSpec::PositiveSign::Space )
-    {
-        prefix = " ";
-    }
-
-    int base;
-    if ( !get_int_base(spec, base, prefix) )
-        return false;
-
-    std::string mantissa = ull_to_string(value, base, ascii::is_upper(spec.format));
-    detail::pad_num(spec, prefix, mantissa, out);
-
-    return true;
-}
-
-bool format(const FormatSpec& spec, unsigned long long value, std::ostream& out)
-{
-    char fmt = ascii::to_lower(spec.format);
-    if ( fmt == 'e' || fmt == 'g' || fmt == 'f' || fmt == '%' )
-        return format(spec, double(value), out);
-
-    std::string prefix;
-
-    if ( spec.positive_sign == FormatSpec::PositiveSign::Plus )
-        prefix = "+";
-    else if ( spec.positive_sign == FormatSpec::PositiveSign::Space )
-        prefix = " ";
-
-    int base;
-    if ( !get_int_base(spec, base, prefix) )
-        return false;
-
-    std::string mantissa = ull_to_string(value, base, ascii::is_upper(spec.format));
-    detail::pad_num(spec, prefix, mantissa, out);
-
-    return true;
-}
 
 bool format(const FormatSpec& spec, std::string value, std::ostream& out)
 {

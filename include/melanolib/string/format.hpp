@@ -69,6 +69,35 @@ struct FormatSpec
 };
 
 namespace detail {
+
+template<class Int>
+    std::string uint_to_string(Int value, int base, bool caps)
+{
+    if ( value == 0 )
+        return "0";
+    std::string result;
+    result.reserve(math::ceil(math::log(value, base)));
+    while ( value )
+    {
+        char digit = value % base;
+        if ( digit < 10 )
+            digit += '0';
+        else if ( caps )
+            digit += 'A' - 10;
+        else
+            digit += 'a' - 10;
+
+        result.push_back(digit);
+        value /= base;
+    }
+
+    std::reverse(result.begin(), result.end());
+
+    return result;
+}
+
+bool get_int_base(const FormatSpec& spec, int& base, std::string& prefix);
+
 void pad_num(const FormatSpec& spec, const std::string& prefix,
              const std::string& mantissa, std::ostream& out);
 
@@ -120,28 +149,41 @@ template<class T>
     return !!(out << std::forward<T>(value));
 }
 
-bool format(const FormatSpec& spec, long long value, std::ostream& out);
-
-bool format(const FormatSpec& spec, unsigned long long value, std::ostream& out);
-
-template<class T>
-    std::enable_if_t<
-        std::is_integral<std::remove_reference_t<T>>::value &&
-        std::is_unsigned<std::remove_reference_t<T>>::value,
-        bool>
-    format(const FormatSpec& spec, T value, std::ostream& out)
-{
-    return format(spec, (unsigned long long)value, out);
-}
+template<class Float>
+    std::enable_if_t<std::is_floating_point<std::remove_reference_t<Float>>::value, bool>
+    format(const FormatSpec& spec, Float value, std::ostream& out);
 
 template<class T>
-    std::enable_if_t<
-        std::is_integral<std::remove_reference_t<T>>::value &&
-        std::is_signed<std::remove_reference_t<T>>::value,
-        bool>
+    std::enable_if_t<std::is_integral<std::remove_reference_t<T>>::value, bool>
     format(const FormatSpec& spec, T value, std::ostream& out)
 {
-    return format(spec, (long long)value, out);
+    char fmt = ascii::to_lower(spec.format);
+    if ( fmt == 'e' || fmt == 'g' || fmt == 'f' || fmt == '%' )
+        return format(spec, (long double)value, out);
+
+    std::string prefix;
+    if ( value < 0 )
+    {
+        prefix = "-";
+        value = -value;
+    }
+    else if ( spec.positive_sign == FormatSpec::PositiveSign::Plus )
+    {
+        prefix = "+";
+    }
+    else if ( spec.positive_sign == FormatSpec::PositiveSign::Space )
+    {
+        prefix = " ";
+    }
+
+    int base;
+    if ( !detail::get_int_base(spec, base, prefix) )
+        return false;
+
+    std::string mantissa = detail::uint_to_string(value, base, ascii::is_upper(spec.format));
+    detail::pad_num(spec, prefix, mantissa, out);
+
+    return true;
 }
 
 template<class Float>
