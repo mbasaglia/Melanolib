@@ -28,7 +28,7 @@
 using boost::test_tools::output_test_stream;
 using namespace melanolib::string;
 
-BOOST_AUTO_TEST_CASE( test_printf_string )
+BOOST_AUTO_TEST_CASE( test_sprintf_string )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%s", "foobar"), "foobar" );
     BOOST_CHECK_EQUAL( format::sprintf("%.3s", "foobar"), "foo" );
@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE( test_printf_string )
     BOOST_CHECK_EQUAL( format::sprintf("%w^5.3s", "foobar"), "wfoow" );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_int )
+BOOST_AUTO_TEST_CASE( test_sprintf_int )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%d", 123), "123" );
 
@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE( test_printf_int )
     BOOST_CHECK_EQUAL( format::sprintf("%.>6d", -123), "..-123" );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_uint )
+BOOST_AUTO_TEST_CASE( test_sprintf_uint )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%d", 123u), "123" );
 
@@ -90,12 +90,12 @@ BOOST_AUTO_TEST_CASE( test_printf_uint )
     BOOST_CHECK_EQUAL( format::sprintf("%.>#6x", 123u), "..0x7b" );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_float_percent )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_percent )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%.1%", 0.3), "30.0%" );
 
 }
-BOOST_AUTO_TEST_CASE( test_printf_float_precision )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_precision )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%.3f", 0.3), "0.300" );
     BOOST_CHECK_EQUAL( format::sprintf("%.3e", 0.3), "3.000e-01" );
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_CASE( test_printf_float_precision )
     BOOST_CHECK_EQUAL( format::sprintf("%.3f", 0.2999), "0.300" );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_float_align )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_align )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%6g", -0.3), "  -0.3" );
     BOOST_CHECK_EQUAL( format::sprintf("%<6g", -0.3), "-0.3  " );
@@ -114,7 +114,7 @@ BOOST_AUTO_TEST_CASE( test_printf_float_align )
     BOOST_CHECK_EQUAL( format::sprintf("%^6g", -0.3), " -0.3 " );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_float_sign )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_sign )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%g", 0.3), "0.3" );
     BOOST_CHECK_EQUAL( format::sprintf("%g", -0.3), "-0.3" );
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE( test_printf_float_sign )
     BOOST_CHECK_EQUAL( format::sprintf("% g", 0.3), " 0.3" );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_float_as_int )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_as_int )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%d", 13.2), "13" );
     BOOST_CHECK_EQUAL( format::sprintf("%x", -13.2), "-d" );
@@ -131,19 +131,19 @@ BOOST_AUTO_TEST_CASE( test_printf_float_as_int )
     BOOST_CHECK_EQUAL( format::sprintf("%b", 13.2), "1101" );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_float_unknown )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_unknown )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%w", 0.3), "" );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_float_special_values )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_special_values )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%g", std::numeric_limits<float>::quiet_NaN()), "NaN" );
     BOOST_CHECK_EQUAL( format::sprintf("%g", std::numeric_limits<float>::infinity()), "Inf" );
     BOOST_CHECK_EQUAL( format::sprintf("%g", -std::numeric_limits<float>::infinity()), "-Inf" );
     BOOST_CHECK_EQUAL( format::sprintf("%=6g", -std::numeric_limits<float>::infinity()), "-  Inf" );
 }
-BOOST_AUTO_TEST_CASE( test_printf_float_g )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_g )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%g", 0.3), "0.3" );
     BOOST_CHECK_EQUAL( format::sprintf("%n", 0.3), "0.3" );
@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE( test_printf_float_g )
     BOOST_CHECK_EQUAL( format::sprintf("%.3g", 0.1234), "0.123" );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_float_e )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_e )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%e", 0.3), "3.000000e-01" );
     BOOST_CHECK_EQUAL( format::sprintf("%E", 0.3), "3.000000E-01" );
@@ -168,7 +168,7 @@ BOOST_AUTO_TEST_CASE( test_printf_float_e )
     BOOST_CHECK_EQUAL( format::sprintf("%.1e", 3e-10), "3.0e-10" );
 }
 
-BOOST_AUTO_TEST_CASE( test_printf_float_f )
+BOOST_AUTO_TEST_CASE( test_sprintf_float_f )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%f", 0.3), "0.300000" );
     BOOST_CHECK_EQUAL( format::sprintf("%f", 3), "3.000000" );
@@ -182,7 +182,26 @@ struct SomeClass
     }
 };
 
-BOOST_AUTO_TEST_CASE( test_printf_custom_default )
+BOOST_AUTO_TEST_CASE( test_sprintf_custom_default )
 {
     BOOST_CHECK_EQUAL( format::sprintf("%s", SomeClass{}), "SomeClass" );
+}
+
+BOOST_AUTO_TEST_CASE( test_sprintf_pattern_text )
+{
+    BOOST_CHECK_EQUAL( format::sprintf("100%%"), "100%" );
+}
+
+BOOST_AUTO_TEST_CASE( test_printf_arg_count )
+{
+    output_test_stream stream;
+
+    BOOST_CHECK( format::printf("success! %i %s!", stream, 123, "foo") );
+    BOOST_CHECK( stream.is_equal("success! 123 foo!") );
+
+    BOOST_CHECK( !format::printf("too many arguments! %i %s!", stream, 123, "foo", "bar") );
+    BOOST_CHECK( stream.is_equal("too many arguments! 123 foo!") );
+
+    BOOST_CHECK( !format::printf("too many arguments! %i %s!", stream, 123) );
+    BOOST_CHECK( stream.is_equal("too many arguments! 123 !") );
 }

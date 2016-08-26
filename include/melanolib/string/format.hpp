@@ -268,6 +268,7 @@ inline bool format(const FormatSpec& spec, char value, std::ostream& out)
 
 inline bool printf(QuickStream& input, std::ostream& output)
 {
+    bool too_many = false;
     while ( !input.eof() )
     {
         char next = input.next();
@@ -282,10 +283,11 @@ inline bool printf(QuickStream& input, std::ostream& output)
         }
         else
         {
-            return false;
+            FormatSpec::parse(input);
+            too_many = true;
         }
     }
-    return true;
+    return !too_many;
 }
 
 template<class Head, class... Args>
@@ -310,11 +312,12 @@ template<class Head, class... Args>
             return printf(input, output, std::forward<Args>(args)...);
         }
     }
-    return sizeof...(args) == 0;
+    // too many arguments
+    return false;
 }
 
 template<class... Args>
-    void printf(const std::string& input, std::ostream& output, Args&&... args)
+    bool printf(const std::string& input, std::ostream& output, Args&&... args)
 {
     QuickStream in_stream(input);
     return printf(in_stream, output, std::forward<Args>(args)...);
