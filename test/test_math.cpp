@@ -98,6 +98,28 @@ BOOST_AUTO_TEST_CASE( test_rounding )
     BOOST_CHECK ( math::ceil(5.00001) == 6 );
     BOOST_CHECK ( math::ceil(5.99999) == 6 );
 
+    BOOST_CHECK ( math::round_away_zero(5.6) == 6 );
+    BOOST_CHECK ( math::round_away_zero(-5.6) == -6 );
+    BOOST_CHECK ( math::round_away_zero(5.5) == 6 );
+    BOOST_CHECK ( math::round_away_zero(-5.5) == -6 );
+    BOOST_CHECK ( math::round_away_zero(5.4) == 6 );
+    BOOST_CHECK ( math::round_away_zero(-5.4) == -6 );
+    BOOST_CHECK ( math::round_away_zero(5.0) == 5 );
+    BOOST_CHECK ( math::round_away_zero(-5.0) == -5 );
+    BOOST_CHECK ( math::round_away_zero(5.00001) == 6 );
+    BOOST_CHECK ( math::round_away_zero(5.99999) == 6 );
+
+    BOOST_CHECK ( math::round_to_zero(5.6) == 5 );
+    BOOST_CHECK ( math::round_to_zero(-5.6) == -5 );
+    BOOST_CHECK ( math::round_to_zero(5.5) == 5 );
+    BOOST_CHECK ( math::round_to_zero(-5.5) == -5 );
+    BOOST_CHECK ( math::round_to_zero(5.4) == 5 );
+    BOOST_CHECK ( math::round_to_zero(-5.4) == -5 );
+    BOOST_CHECK ( math::round_to_zero(5.0) == 5 );
+    BOOST_CHECK ( math::round_to_zero(-5.0) == -5 );
+    BOOST_CHECK ( math::round_to_zero(5.00001) == 5 );
+    BOOST_CHECK ( math::round_to_zero(5.99999) == 5 );
+
     BOOST_CHECK(math::fuzzy_compare(math::fractional( 5.6),     .6) );
     BOOST_CHECK(math::fuzzy_compare(math::fractional(-5.6),    -.6) );
     BOOST_CHECK(math::fuzzy_compare(math::fractional( 5.5),     .5) );

@@ -56,6 +56,14 @@ using std::acosh;
 using std::atanh;
 
 /**
+ * \brief Logarithm of an arbotrary base
+ */
+inline long double log(long double arg, long double base)
+{
+    return log(arg) / log(base);
+}
+
+/**
  * \brief Truncates a number (rounds towards zero)
  * \tparam Return   Return type (Must be an integral type)
  * \tparam Argument Argument type (Must be a floating point type)
@@ -115,7 +123,7 @@ template<class Return=int, class Argument=double>
     }
 
 /**
- * \brief Rounds a number towards negative infinitive
+ * \brief Rounds a number towards positive infinitive
  * \tparam Return   Return type (Must be an integral type)
  * \tparam Argument Argument type (Must be a floating point type)
  */
@@ -123,6 +131,28 @@ template<class Return=int, class Argument=double>
     constexpr Return ceil(Argument x)
     {
         return truncate<Return>(x < 0 || fractional(x) == 0 ? x : x + 1 - fractional(x));
+    }
+
+/**
+ * \brief Rounds a number away from zero
+ * \tparam Return   Return type (Must be an integral type)
+ * \tparam Argument Argument type (Must be a floating point type)
+ */
+template<class Return=int, class Argument=double>
+    constexpr Return round_away_zero(Argument x)
+    {
+        return x < 0 ? floor<Return>(x) : ceil<Return>(x);
+    }
+
+/**
+ * \brief Rounds a number towards zero
+ * \tparam Return   Return type (Must be an integral type)
+ * \tparam Argument Argument type (Must be a floating point type)
+ */
+template<class Return=int, class Argument=double>
+    constexpr Return round_to_zero(Argument x)
+    {
+        return x < 0 ? ceil<Return>(x) : floor<Return>(x);
     }
 
 /**

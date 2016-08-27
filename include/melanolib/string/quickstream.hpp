@@ -40,12 +40,13 @@ template <class CharT, class Traits=std::char_traits<CharT>>
 {
 public:
     using char_type     = CharT;
-    using string_type   = std::basic_string<CharT,Traits>;
+    using string_type   = std::basic_string<CharT, Traits>;
     using pos_type      = typename string_type::size_type;
     using size_type     = typename string_type::size_type;
     using int_type      = typename Traits::int_type;
     using regex_type    = std::basic_regex<CharT>;
     using match_type    = std::match_results<typename string_type::const_iterator>;
+    using traits_type   = Traits;
 
     BasicQuickStream() {}
     BasicQuickStream(std::string input) : source(std::move(input)) {}
