@@ -23,7 +23,7 @@ if(NOT DEFINED BUILD_SHARED_MELANO_LIBS)
 endif()
 
 function(add_melano_lib name)
-    if(${BUILD_SHARED_MELANO_LIBS})
+    if(BUILD_SHARED_MELANO_LIBS)
         add_library(${name} SHARED ${ARGN})
     else()
         add_library(${name} STATIC ${ARGN})
