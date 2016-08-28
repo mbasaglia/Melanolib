@@ -144,22 +144,22 @@ void format_body(char format, const std::string& mantissa,
 
 template<class T>
     std::enable_if_t<!std::is_arithmetic<std::remove_reference_t<T>>::value, bool>
-    format(const FormatSpec& spec, T&& value, std::ostream& out)
+    format_item(const FormatSpec& spec, T&& value, std::ostream& out)
 {
     return !!(out << std::forward<T>(value));
 }
 
 template<class Float>
     std::enable_if_t<std::is_floating_point<std::remove_reference_t<Float>>::value, bool>
-    format(const FormatSpec& spec, Float value, std::ostream& out);
+    format_item(const FormatSpec& spec, Float value, std::ostream& out);
 
 template<class T>
     std::enable_if_t<std::is_integral<std::remove_reference_t<T>>::value, bool>
-    format(const FormatSpec& spec, T value, std::ostream& out)
+    format_item(const FormatSpec& spec, T value, std::ostream& out)
 {
     char fmt = ascii::to_lower(spec.format);
     if ( fmt == 'e' || fmt == 'g' || fmt == 'f' || fmt == '%' )
-        return format(spec, (long double)value, out);
+        return format_item(spec, (long double)value, out);
 
     std::string prefix;
     if ( value < 0 )
@@ -188,14 +188,14 @@ template<class T>
 
 template<class Float>
     std::enable_if_t<std::is_floating_point<std::remove_reference_t<Float>>::value, bool>
-    format(const FormatSpec& spec, Float value, std::ostream& out)
+    format_item(const FormatSpec& spec, Float value, std::ostream& out)
 {
     if ( spec.format == 'd' || spec.format == 'i' || spec.format == 'o' ||
          spec.format == 'b' || spec.format == 'x' || spec.format == 'X' )
     {
         if ( value < 0 )
-            return format(spec, (long long)value, out);
-        return format(spec, (unsigned long long)value, out);
+            return format_item(spec, (long long)value, out);
+        return format_item(spec, (unsigned long long)value, out);
     }
 
     char fmt = ascii::to_lower(spec.format);
@@ -251,19 +251,19 @@ template<class Float>
     return true;
 }
 
-bool format(const FormatSpec& spec, std::string value, std::ostream& out);
+bool format_item(const FormatSpec& spec, std::string value, std::ostream& out);
 
-inline bool format(const FormatSpec& spec, const char* value, std::ostream& out)
+inline bool format_item(const FormatSpec& spec, const char* value, std::ostream& out)
 {
-    return format(spec, std::string(value), out);
+    return format_item(spec, std::string(value), out);
 }
 
-inline bool format(const FormatSpec& spec, char value, std::ostream& out)
+inline bool format_item(const FormatSpec& spec, char value, std::ostream& out)
 {
     if ( spec.format != 's' && spec.format != ' ' && spec.format != 'c' )
-        return format(spec, std::string(1, value), out);
+        return format_item(spec, std::string(1, value), out);
     else
-        return format(spec, int(value), out);
+        return format_item(spec, int(value), out);
 }
 
 inline bool printf(QuickStream& input, std::ostream& output)
@@ -307,7 +307,7 @@ template<class Head, class... Args>
         }
         else
         {
-            if ( !format(FormatSpec::parse(input), std::forward<Head>(head), output) )
+            if ( !format_item(FormatSpec::parse(input), std::forward<Head>(head), output) )
                 return false;
             return printf(input, output, std::forward<Args>(args)...);
         }

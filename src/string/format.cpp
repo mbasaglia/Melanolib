@@ -250,7 +250,7 @@ bool get_int_base(const FormatSpec& spec, int& base, std::string& prefix)
 
 } // namespace detail
 
-bool format(const FormatSpec& spec, std::string value, std::ostream& out)
+bool format_item(const FormatSpec& spec, std::string value, std::ostream& out)
 {
     if ( spec.format != 's' && spec.format != ' ' && spec.format != 'c' )
         return false;
