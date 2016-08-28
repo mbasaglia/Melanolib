@@ -59,7 +59,7 @@ namespace detail {
     /**
      * \brief Type used to detect the operators defined in this namespace
      */
-    class WrongOverload{};
+    struct WrongOverload{};
 
     /**
      * \brief Type to which anything can be conveted
@@ -85,9 +85,69 @@ namespace detail {
             >::value
         >
     {};
+
+    /**
+     * \brief Helper for IsCallable and IsCallableAnyReturn
+     */
+    template<class T, class Ret, class... Args>
+    struct IsCallableHelper
+    {
+        /**
+         * \brief "good" sfinae overload, returns the real return type of T()(Args...)
+         */
+        template<class C>
+        static decltype(std::declval<C>()(std::declval<Args>()...)) test(int);
+
+        /**
+         * \brief Fall back overload
+         */
+        template<class C>
+        static WrongOverload test(Gobble);
+
+        /**
+         * \brief Type returned by test()
+         */
+        using return_type = decltype(test<T>(1));
+
+        /**
+         * \brief \b true if the return type is convertible to the target
+         */
+        static constexpr bool convertible = std::is_convertible<return_type, Ret>::value;
+        /**
+         * \brief \b true if any call operator is available
+         */
+        static constexpr bool any = !std::is_same<return_type, WrongOverload>::value;
+
+
+        /// \note could also add exact = std::is_same<return_type, Ret>::value
+        ///       to check for an exact match
+
+    };
+
+    /**
+     * \brief Type that inherits from \c std::true_type or \c std::false_type
+     *        based on whether \p T has a proper operator(Args...).
+     * \note C++17 introduces std::is_callable which could be used instead.
+     */
+    template<class T, class Ret=void, class... Args>
+    class IsCallable : public
+        std::integral_constant<bool, IsCallableHelper<T, Ret, Args...>::convertible>
+    {};
+
+    /**
+     * \brief Type that inherits from \c std::true_type or \c std::false_type
+     *        based on whether \p T has a proper operator(Args...).
+     * \note C++17 introduces std::is_callable which could be used instead.
+     */
+    template<class T, class... Args>
+    class IsCallableAnyReturn : public
+        std::integral_constant<bool, IsCallableHelper<T, void, Args...>::any>
+    {};
 }
 
 using detail::StreamInsertable;
+using detail::IsCallable;
+using detail::IsCallableAnyReturn;
 
 /**
  * \brief Type that inherits from \c std::true_type or \c std::false_type
