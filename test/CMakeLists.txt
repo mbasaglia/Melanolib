@@ -42,7 +42,7 @@ if (BUILD_TESTING)
     test_target(test_ordered_multimap)
     test_target(test_movable)
     test_target(test_type_utils)
-    test_target(test_color)
+    test_target(test_color melano_color)
     test_target(test_format melano_stringutils)
 
 else()

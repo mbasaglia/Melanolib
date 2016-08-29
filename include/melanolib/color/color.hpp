@@ -102,15 +102,15 @@ struct XYZ
  */
 struct RGB_int24
 {
-    int32_t rgb;
-    constexpr RGB_int24(int32_t rgb) : rgb(rgb) {}
+    uint32_t rgb;
+    constexpr RGB_int24(uint32_t rgb) : rgb(rgb) {}
 
-    constexpr int32_t rgba(uint8_t alpha = 255) const
+    constexpr uint32_t rgba(uint8_t alpha = 255) const
     {
         return (rgb << 8) | alpha;
     }
 
-    constexpr int32_t argb(uint8_t alpha = 255) const
+    constexpr uint32_t argb(uint8_t alpha = 255) const
     {
         return (alpha << 24) | rgb;
     }
@@ -289,6 +289,12 @@ public:
             linear_interpolation(alpha_float(), oth.alpha_float(), factor)
         );
     }
+
+    /**
+     * \brief Formats the color according to a template string
+     * \see melanolib::format::format()
+     */
+    std::string format(const std::string& template_string = "#{r:02x}{g:02x}{b:02x}") const;
 
 private:
     template<class Repr>

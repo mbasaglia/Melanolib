@@ -317,3 +317,81 @@ BOOST_AUTO_TEST_CASE( test_rgb_int3_round_trip )
         BOOST_CHECK_EQUAL(converted.color, rgb3.color);
     }
 }
+
+BOOST_AUTO_TEST_CASE( test_format_rgb )
+{
+    Color color(0x01, 0x23, 0x45, 0x67);
+
+    BOOST_CHECK_EQUAL(color.format(), "#012345");
+
+    BOOST_CHECK_EQUAL(color.format("{a} {alpha} {a:.2f} {rgb.a} {hsv.a}"), "103 103 0.40 103 103");
+
+    BOOST_CHECK_EQUAL(color.format("{r} {red} {rgb.r} {r:.3f}"), "1 1 1 0.004");
+    BOOST_CHECK_EQUAL(color.format("{g} {green} {g:.3f}"), "35 35 0.137");
+    BOOST_CHECK_EQUAL(color.format("{b} {blue} {b:.3f}"), "69 69 0.271");
+
+    BOOST_CHECK_EQUAL(color.format("{rgb.int24:x}"), "12345");
+    BOOST_CHECK_EQUAL(color.format("{rgb.int24.rgb:x}"), "12345");
+    BOOST_CHECK_EQUAL(color.format("{rgb.int24.rgba:x}"), "1234567");
+    BOOST_CHECK_EQUAL(color.format("{rgb.int24.argb:x}"), "67012345");
+
+    BOOST_CHECK_EQUAL(color.format("{rgb.int12:03x}"), "024");
+    BOOST_CHECK_EQUAL(color.format("{rgb.int12.rgb:03x}"), "024");
+    BOOST_CHECK_EQUAL(color.format("{rgb.int12.rgba:04x}"), "0246");
+    BOOST_CHECK_EQUAL(color.format("{rgb.int12.argb:04x}"), "6024");
+
+    BOOST_CHECK_EQUAL(color.format("{rgb.int3}"), "6");
+    BOOST_CHECK_EQUAL(color.format("{rgb.int3.rgb}"), "6");
+    BOOST_CHECK_EQUAL(color.format("{rgb.int3.bright}"), "0");
+
+    BOOST_CHECK_EQUAL(color.format("{rgb.foo}"), "");
+    BOOST_CHECK_EQUAL(color.format("{}"), "");
+}
+
+BOOST_AUTO_TEST_CASE( test_format_hsv )
+{
+    Color color(repr::HSVf(0.5, 0.6, 0.7));
+    BOOST_CHECK_EQUAL(color.format("{hsv.h:.1f}"), "0.5");
+    BOOST_CHECK_EQUAL(color.format("{hsv.hue:.1f}"), "0.5");
+
+    BOOST_CHECK_EQUAL(color.format("{hsv.s:.1f}"), "0.6");
+    BOOST_CHECK_EQUAL(color.format("{hsv.sat:.1f}"), "0.6");
+    BOOST_CHECK_EQUAL(color.format("{hsv.saturation:.1f}"), "0.6");
+
+    BOOST_CHECK_EQUAL(color.format("{hsv.v:.1f}"), "0.7");
+    BOOST_CHECK_EQUAL(color.format("{hsv.val:.1f}"), "0.7");
+    BOOST_CHECK_EQUAL(color.format("{hsv.value:.1f}"), "0.7");
+    BOOST_CHECK_EQUAL(color.format("{hsv.brightness:.1f}"), "0.7");
+
+    BOOST_CHECK_EQUAL(color.format("{hsv.foo}"), "");
+}
+
+BOOST_AUTO_TEST_CASE( test_format_lab )
+{
+    Color color(repr::Lab(53.233, 80.109, 67.220));
+    BOOST_CHECK_EQUAL(color.format("{lab.l:.3f}"), "53.233");
+    BOOST_CHECK_EQUAL(color.format("{lab.L:.3f}"), "53.233");
+
+    BOOST_CHECK_EQUAL(color.format("{lab.a:.3f}"), "80.109");
+    BOOST_CHECK_EQUAL(color.format("{lab.a*:.3f}"), "80.109");
+
+    BOOST_CHECK_EQUAL(color.format("{lab.b:.3f}"), "67.220");
+    BOOST_CHECK_EQUAL(color.format("{lab.b*:.3f}"), "67.220");
+
+    BOOST_CHECK_EQUAL(color.format("{lab.foo}"), "");
+}
+
+BOOST_AUTO_TEST_CASE( test_format_xyz )
+{
+    Color color(repr::XYZ(25.769, 22.658, 97.623));
+    BOOST_CHECK_EQUAL(color.format("{xyz.x:.3f}"), "25.769");
+    BOOST_CHECK_EQUAL(color.format("{xyz.X:.3f}"), "25.769");
+
+    BOOST_CHECK_EQUAL(color.format("{xyz.y:.3f}"), "22.658");
+    BOOST_CHECK_EQUAL(color.format("{xyz.Y:.3f}"), "22.658");
+
+    BOOST_CHECK_EQUAL(color.format("{xyz.z:.3f}"), "97.623");
+    BOOST_CHECK_EQUAL(color.format("{xyz.Z:.3f}"), "97.623");
+
+    BOOST_CHECK_EQUAL(color.format("{xyz.foo}"), "");
+}
