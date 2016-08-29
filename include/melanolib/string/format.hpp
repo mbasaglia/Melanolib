@@ -63,6 +63,43 @@ struct FormatSpec
         return ch == '<' || ch == '>' || ch == '^' || ch == '=';
     }
 
+    bool type_auto() const
+    {
+        return format == ' ';
+    }
+
+    bool type_string() const
+    {
+        return format == 's';
+    }
+
+    bool type_char() const
+    {
+        return format == 'c';
+    }
+
+    bool type_int() const
+    {
+        return format == 'd' || format == 'i' || format == 'o' ||
+               format == 'b' || format == 'x' || format == 'X';
+    }
+
+    bool type_float() const
+    {
+        char fmt = ascii::to_lower(format);
+        return fmt == 'e' || fmt == 'g' || fmt == 'f' || fmt == '%';
+    }
+
+    bool type_auto_number() const
+    {
+        return ascii::to_lower(format) == 'n';
+    }
+
+    bool type_numeric() const
+    {
+        return type_float() || type_int();
+    }
+
     /**
      * \see https://docs.python.org/2/library/string.html#format-specification-mini-language
      */
@@ -207,9 +244,11 @@ template<class T>
     std::enable_if_t<std::is_integral<std::remove_reference_t<T>>::value, bool>
     format_item(const FormatSpec& spec, T value, std::ostream& out)
 {
-    char fmt = ascii::to_lower(spec.format);
-    if ( fmt == 'e' || fmt == 'g' || fmt == 'f' || fmt == '%' )
+    if ( spec.type_float() )
         return format_item(spec, (long double)value, out);
+
+    if ( !spec.type_auto() && !spec.type_auto_number() && !spec.type_int() )
+        return false;
 
     std::string prefix;
     if ( value < 0 )
@@ -240,26 +279,23 @@ template<class Float>
     std::enable_if_t<std::is_floating_point<std::remove_reference_t<Float>>::value, bool>
     format_item(const FormatSpec& spec, Float value, std::ostream& out)
 {
-    if ( spec.format == 'd' || spec.format == 'i' || spec.format == 'o' ||
-         spec.format == 'b' || spec.format == 'x' || spec.format == 'X' )
+    if ( spec.type_int() )
     {
         if ( value < 0 )
             return format_item(spec, (long long)value, out);
         return format_item(spec, (unsigned long long)value, out);
     }
 
-    char fmt = ascii::to_lower(spec.format);
-    if ( fmt != 'e' && fmt != 'g' && fmt != 'f' && fmt != 'n' && fmt != '%' )
+    if ( !spec.type_auto() && !spec.type_auto_number() && !spec.type_float() )
         return false;
 
     bool negative = false;
     std::string body;
     std::string suffix;
 
-    if ( fmt == '%' )
+    if ( spec.format == '%' )
     {
         suffix = "%";
-        fmt = 'f';
         value *= 100;
     }
 
@@ -310,7 +346,7 @@ inline bool format_item(const FormatSpec& spec, const char* value, std::ostream&
 
 inline bool format_item(const FormatSpec& spec, char value, std::ostream& out)
 {
-    if ( spec.format != 's' && spec.format != ' ' && spec.format != 'c' )
+    if ( spec.type_string() || spec.type_char() || spec.type_auto() )
         return format_item(spec, std::string(1, value), out);
     else
         return format_item(spec, int(value), out);

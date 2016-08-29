@@ -252,7 +252,7 @@ bool get_int_base(const FormatSpec& spec, int& base, std::string& prefix)
 
 bool format_item(const FormatSpec& spec, std::string value, std::ostream& out)
 {
-    if ( spec.format != 's' && spec.format != ' ' && spec.format != 'c' )
+    if ( !spec.type_string() && !spec.type_char() && !spec.type_auto() )
         return false;
 
     if ( value.size() > spec.precision )
