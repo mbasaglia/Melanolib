@@ -175,6 +175,17 @@ BOOST_AUTO_TEST_CASE( test_sprintf_float_f )
     BOOST_CHECK_EQUAL( format::sprintf("%f", 0.003), "0.003000" );
     BOOST_CHECK_EQUAL( format::sprintf("%f", 3e-6),  "0.000003" );
     BOOST_CHECK_EQUAL( format::sprintf("%f", 3e-7),  "0.000000" );
+    BOOST_CHECK_EQUAL( format::sprintf("%f", 9e-7),  "0.000001" );
+}
+
+BOOST_AUTO_TEST_CASE( test_sprintf_float_rounding)
+{
+    BOOST_CHECK_EQUAL( format::sprintf("%f", 0.999999),  "0.999999" );
+    BOOST_CHECK_EQUAL( format::sprintf("%f", 0.9999999), "1.000000" );
+    BOOST_CHECK_EQUAL( format::sprintf("%f", 0.0009999), "0.001000" );
+    BOOST_CHECK_EQUAL( format::sprintf("%e", 0.999999),  "9.999990e-01" );
+    BOOST_CHECK_EQUAL( format::sprintf("%e", 0.9999999), "1.000000e00" );
+    BOOST_CHECK_EQUAL( format::sprintf("%e", 0.0009999), "9.999000e-04" );
 }
 
 struct SomeClass

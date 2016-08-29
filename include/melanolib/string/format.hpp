@@ -147,8 +147,14 @@ template<class Float>
         return math::ceil(math::log(value, base));
     }
 
+/**
+ * \brief Rounds a decimal string
+ * \returns \b true if it overflows
+ */
+bool round_mantissa(std::string& mantissa, std::size_t at);
+
 template<class Float>
-    std::string extract_digits(Float value, int base, std::size_t precision, int exponent)
+    std::string extract_digits(Float value, int base, std::size_t precision, int& exponent)
 {
     std::string mantissa;
     Float q = value / math::pow(base, exponent);
@@ -161,22 +167,16 @@ template<class Float>
         mantissa += '0' + digit;
     }
 
-    if ( digit >= 5 )
+    if ( round_mantissa(mantissa, mantissa.size() - 1) )
     {
-        for ( auto it = mantissa.rbegin(); it != mantissa.rend(); ++it )
-        {
-            *it += 1;
-            if ( *it > '9' )
-                *it = '0';
-            else
-                break;
-        }
+        exponent += 1;
+        mantissa.insert(mantissa.begin(), '1');
     }
+
     return mantissa;
 }
 
-void format_body(char format, const std::string& mantissa,
-                 std::size_t precision, int exponent, std::string& body);
+void format_body(char format, std::string mantissa, std::size_t precision, int exponent, std::string& body);
 
 template<class Generator>
     std::enable_if_t<

@@ -147,7 +147,34 @@ void pad_num(const FormatSpec& spec, const std::string& prefix,
         out << padding << prefix << mantissa;
 }
 
-void format_body(char format, const std::string& mantissa,
+bool round_mantissa(std::string& mantissa, std::size_t at)
+{
+    if ( at >= mantissa.size() )
+        return false;
+
+    if ( mantissa[at] - '0' >= 5 )
+    {
+        for ( auto it = mantissa.rend() - at - 1; it != mantissa.rend(); ++it )
+        {
+            *it += 1;
+            if ( *it > '9' )
+            {
+                *it = '0';
+                if ( it + 1 == mantissa.rend() )
+                    return true;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    return false;
+}
+
+
+void format_body(char format, std::string mantissa,
                  std::size_t precision, int exponent, std::string& body)
 {
     char fmt = std::tolower(format);
@@ -212,6 +239,8 @@ void format_body(char format, const std::string& mantissa,
             {
                 extra_zeros = std::string(-exponent, '0');
                 precision += exponent;
+                if ( round_mantissa(mantissa, precision) )
+                    extra_zeros.back() = '1';
             }
 
             exponent = 0;
