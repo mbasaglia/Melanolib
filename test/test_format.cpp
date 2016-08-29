@@ -170,8 +170,11 @@ BOOST_AUTO_TEST_CASE( test_sprintf_float_e )
 
 BOOST_AUTO_TEST_CASE( test_sprintf_float_f )
 {
-    BOOST_CHECK_EQUAL( format::sprintf("%f", 0.3), "0.300000" );
-    BOOST_CHECK_EQUAL( format::sprintf("%f", 3), "3.000000" );
+    BOOST_CHECK_EQUAL( format::sprintf("%f", 3),     "3.000000" );
+    BOOST_CHECK_EQUAL( format::sprintf("%f", 0.3),   "0.300000" );
+    BOOST_CHECK_EQUAL( format::sprintf("%f", 0.003), "0.003000" );
+    BOOST_CHECK_EQUAL( format::sprintf("%f", 3e-6),  "0.000003" );
+    BOOST_CHECK_EQUAL( format::sprintf("%f", 3e-7),  "0.000000" );
 }
 
 struct SomeClass

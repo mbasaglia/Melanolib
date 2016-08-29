@@ -441,7 +441,7 @@ template<class Callback>
                     return false;
                 input.ignore();
             }
-            if ( !detail::format_callback(std::forward<Callback>(callback), name, spec, output) )
+            if ( !detail::format_callback(callback, name, spec, output) )
                 ok = false;
         }
     }

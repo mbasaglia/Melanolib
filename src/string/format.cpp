@@ -200,6 +200,7 @@ void format_body(char format, const std::string& mantissa,
     }
     else
     {
+        std::string extra_zeros;
         exponent += 1;
         if ( exponent > 0 )
         {
@@ -207,12 +208,18 @@ void format_body(char format, const std::string& mantissa,
         }
         else
         {
+            if ( exponent < 0 )
+            {
+                extra_zeros = std::string(-exponent, '0');
+                precision += exponent;
+            }
+
             exponent = 0;
             body.push_back('0');
         }
 
         if ( showfrac && mantissa.size() > std::size_t(exponent) )
-            body += "." + mantissa.substr(exponent, precision);
+            body += "." + extra_zeros + mantissa.substr(exponent, precision);
     }
 }
 
