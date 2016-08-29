@@ -205,3 +205,37 @@ BOOST_AUTO_TEST_CASE( test_printf_arg_count )
     BOOST_CHECK( !format::printf("too many arguments! %i %s!", stream, 123) );
     BOOST_CHECK( stream.is_equal("too many arguments! 123 !") );
 }
+
+BOOST_AUTO_TEST_CASE( test_format_map )
+{
+    std::map<std::string, int> values = {
+        {"foo", 1},
+        {"bar", 2}
+    };
+    BOOST_CHECK_EQUAL( format::sformat("{foo}", values), "1" );
+    BOOST_CHECK_EQUAL( format::sformat("{foo} {bar:#x}", values), "1 0x2" );
+    BOOST_CHECK_EQUAL( format::sformat("{foo} {bar:#x", values), "" );
+}
+
+BOOST_AUTO_TEST_CASE( test_format_functor_map )
+{
+    auto values = [](const std::string& name){ return name; };
+    BOOST_CHECK_EQUAL( format::sformat("hello {foo}!", values), "hello foo!" );
+}
+
+BOOST_AUTO_TEST_CASE( test_format_functor_boolreturn )
+{
+    auto values = [](const std::string& name, const format::FormatSpec& spec, std::ostream& os){
+        return format::format_item(spec, 123, os);
+    };
+    BOOST_CHECK_EQUAL( format::sformat("hello {foo}!", values), "hello 123!" );
+}
+
+
+BOOST_AUTO_TEST_CASE( test_format_functor_voidreturn )
+{
+    auto values = [](const std::string& name, const format::FormatSpec& spec, std::ostream& os){
+        format::format_item(spec, 123, os);
+    };
+    BOOST_CHECK_EQUAL( format::sformat("hello {foo}!", values), "hello 123!" );
+}

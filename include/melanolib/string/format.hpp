@@ -26,6 +26,7 @@
 #include "melanolib/string/quickstream.hpp"
 #include "melanolib/string/ascii.hpp"
 #include "melanolib/math/math.hpp"
+#include "melanolib/utils/type_utils.hpp"
 
 namespace melanolib {
 namespace string {
@@ -139,6 +140,55 @@ template<class Float>
 
 void format_body(char format, const std::string& mantissa,
                  std::size_t precision, int exponent, std::string& body);
+
+template<class Generator>
+    std::enable_if_t<
+        IsCallable<Generator, bool, const std::string&, const FormatSpec&, std::ostream&>::value,
+        bool
+    >
+    format_callback(Generator&& generator, const std::string& key,
+                    const FormatSpec& spec, std::ostream& output)
+{
+    return generator(key, spec, output);
+}
+
+template<class Generator>
+    std::enable_if_t<
+        !IsCallable<Generator, bool, const std::string&, const FormatSpec&, std::ostream&>::value &&
+        IsCallableAnyReturn<Generator, const std::string&, const FormatSpec&, std::ostream&>::value,
+        bool
+    >
+    format_callback(Generator&& generator, const std::string& key,
+                    const FormatSpec& spec, std::ostream& output)
+{
+    generator(key, spec, output);
+    return true;
+}
+
+template<class Generator>
+    std::enable_if_t<
+        !IsCallableAnyReturn<Generator, const std::string&, const FormatSpec&, std::ostream&>::value &&
+        !IsCallable<Generator, void, const std::string&>::value &&
+        IsCallableAnyReturn<Generator, const std::string&>::value,
+        bool
+    >
+    format_callback(Generator&& generator, const std::string& key,
+                    const FormatSpec& spec, std::ostream& output)
+{
+    return format_item(spec, generator(key), output);
+}
+
+template<class Generator>
+    std::enable_if_t<
+        !IsCallableAnyReturn<Generator, const std::string&, const FormatSpec&, std::ostream&>::value &&
+        !IsCallableAnyReturn<Generator, const std::string&>::value,
+        bool
+    >
+    format_callback(Generator&& generator, const std::string& key,
+                    const FormatSpec& spec, std::ostream& output)
+{
+    return format_item(spec, generator[key], output);
+}
 
 } // namespace detail
 
@@ -329,6 +379,52 @@ template<class... Args>
     QuickStream in_stream(input);
     std::ostringstream out_stream;
     if ( printf(in_stream, out_stream, std::forward<Args>(args)...) )
+        return out_stream.str();
+    return {};
+}
+
+template<class Callback>
+    bool format(QuickStream& input, std::ostream& output, Callback&& callback)
+{
+    bool ok = true;
+    while ( !input.eof() )
+    {
+        char next = input.next();
+        if ( next != '{' )
+        {
+            output.put(next);
+        }
+        else
+        {
+            std::string name = input.get_until([](char c){ return c == ':' || c == '}'; });
+            FormatSpec spec;
+            if ( input.peek_back() == ':' )
+            {
+                spec = FormatSpec::parse(input);
+                if ( input.peek() != '}' )
+                    return false;
+                input.ignore();
+            }
+            if ( !detail::format_callback(std::forward<Callback>(callback), name, spec, output) )
+                ok = false;
+        }
+    }
+    return ok;
+}
+
+template<class Callback>
+    bool format(const std::string& input, std::ostream& output, Callback&& callback)
+{
+    QuickStream in_stream(input);
+    return format(in_stream, std::forward<Callback>(callback), output);
+}
+
+template<class Callback>
+    std::string sformat(const std::string& input, Callback&& callback)
+{
+    QuickStream in_stream(input);
+    std::ostringstream out_stream;
+    if ( format(in_stream, out_stream, std::forward<Callback>(callback)) )
         return out_stream.str();
     return {};
 }
