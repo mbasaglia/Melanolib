@@ -144,22 +144,22 @@ template<class Float>
     {
         if ( value == 0 )
             return 0;
-        return math::ceil(math::log(value, base));
+        return math::floor(math::log(value, base));
     }
 
 /**
  * \brief Rounds a decimal string
  * \returns \b true if it overflows
  */
-bool round_mantissa(std::string& mantissa, std::size_t at);
+bool round_mantissa(std::string& mantissa, std::size_t next_pos, bool next_rounds = false);
 
 template<class Float>
     std::string extract_digits(Float value, int base, std::size_t precision, int& exponent)
 {
     std::string mantissa;
-    Float q = value / math::pow(base, exponent);
+    Float q = value / math::pow(base, exponent + 1);
     int digit = 0;
-    for ( std::size_t i = 0; i < precision + math::max(1, exponent); i++ )
+    for ( std::size_t i = 0; i < precision; i++ )
     {
         Float scaled = q * base;
         digit = math::floor(scaled);
@@ -167,7 +167,7 @@ template<class Float>
         mantissa += '0' + digit;
     }
 
-    if ( round_mantissa(mantissa, mantissa.size() - 1) )
+    if ( round_mantissa(mantissa, mantissa.size(), q >= 0.5) )
     {
         exponent += 1;
         mantissa.insert(mantissa.begin(), '1');
@@ -275,6 +275,11 @@ template<class T>
     return true;
 }
 
+inline static bool g_uses_exp_notation(int exponent, int precision)
+{
+    return -4 > exponent || exponent >= int(precision);
+}
+
 template<class Float>
     std::enable_if_t<std::is_floating_point<std::remove_reference_t<Float>>::value, bool>
     format_item(const FormatSpec& spec, Float value, std::ostream& out)
@@ -321,7 +326,21 @@ template<class Float>
         std::size_t precision = spec.precision;
         if ( precision == std::numeric_limits<std::size_t>::max() )
             precision = 6;
-        std::string mantissa = detail::extract_digits(value, base, precision, exponent);
+
+        bool exp_notation =  ascii::to_lower(spec.format) == 'e';
+
+        if ( std::tolower(spec.format) == 'g' || std::tolower(spec.format) == 'n' )
+            exp_notation = g_uses_exp_notation(exponent, precision);
+
+        std::size_t digit_count = precision;
+        if ( exp_notation )
+            digit_count += 1;
+        else if ( exponent + 1 >= -int(digit_count) )
+            digit_count += exponent + 1;
+        else
+            digit_count = 0;
+
+        std::string mantissa = detail::extract_digits(value, base, digit_count, exponent);
         detail::format_body(spec.format, mantissa, precision, exponent, body);
     }
 

@@ -147,20 +147,23 @@ void pad_num(const FormatSpec& spec, const std::string& prefix,
         out << padding << prefix << mantissa;
 }
 
-bool round_mantissa(std::string& mantissa, std::size_t at)
+bool round_mantissa(std::string& mantissa, std::size_t next_pos, bool next_rounds)
 {
-    if ( at >= mantissa.size() )
+    if ( next_pos > mantissa.size() )
         return false;
 
-    if ( mantissa[at] - '0' >= 5 )
+    if ( mantissa.empty() && next_rounds )
+        return true;
+
+    if ( next_rounds || (next_pos < mantissa.size()  && mantissa[next_pos] - '0' >= 5) )
     {
-        for ( auto it = mantissa.rend() - at - 1; it != mantissa.rend(); ++it )
+        for ( int i = next_pos - 1; i >= 0; i-- )
         {
-            *it += 1;
-            if ( *it > '9' )
+            mantissa[i] += 1;
+            if ( mantissa[i] > '9' )
             {
-                *it = '0';
-                if ( it + 1 == mantissa.rend() )
+                mantissa[i] = '0';
+                if ( i == 0 )
                     return true;
             }
             else
@@ -179,14 +182,13 @@ void format_body(char format, std::string mantissa,
 {
     char fmt = std::tolower(format);
     bool showfrac = true;
-    exponent -= 1;
 
     if ( fmt == 'g' || fmt == 'n' )
     {
-        if ( -4 <= exponent && exponent < int(precision) )
-            fmt = 'f';
-        else
+        if ( g_uses_exp_notation(exponent, precision) )
             fmt = 'e';
+        else
+            fmt = 'f';
 
         auto last_nonzero = mantissa.find_last_not_of('0');
         if ( last_nonzero == std::string::npos )
@@ -235,20 +237,23 @@ void format_body(char format, std::string mantissa,
         }
         else
         {
+            bool overflow = false;
             if ( exponent < 0 )
             {
                 extra_zeros = std::string(-exponent, '0');
                 precision += exponent;
-                if ( round_mantissa(mantissa, precision) )
-                    extra_zeros.back() = '1';
             }
 
             exponent = 0;
-            body.push_back('0');
+            body.push_back(overflow ? '1' : '0');
         }
 
-        if ( showfrac && mantissa.size() > std::size_t(exponent) )
-            body += "." + extra_zeros + mantissa.substr(exponent, precision);
+        if ( showfrac && (!extra_zeros.empty() || mantissa.size() > std::size_t(exponent)) )
+        {
+            body += '.' + extra_zeros;
+            if ( mantissa.size() > std::size_t(exponent) )
+                body += mantissa.substr(exponent, precision);
+        }
     }
 }
 
