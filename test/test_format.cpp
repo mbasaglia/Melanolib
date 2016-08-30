@@ -247,7 +247,6 @@ BOOST_AUTO_TEST_CASE( test_format_functor_boolreturn )
     BOOST_CHECK_EQUAL( format::sformat("hello {foo}!", values), "hello 123!" );
 }
 
-
 BOOST_AUTO_TEST_CASE( test_format_functor_voidreturn )
 {
     auto values = [](const std::string& name, const format::FormatSpec& spec, std::ostream& os){
@@ -255,3 +254,13 @@ BOOST_AUTO_TEST_CASE( test_format_functor_voidreturn )
     };
     BOOST_CHECK_EQUAL( format::sformat("hello {foo}!", values), "hello 123!" );
 }
+
+BOOST_AUTO_TEST_CASE( test_format_escape_braces )
+{
+    std::map<std::string, int> values = {
+        {"foo", 1},
+        {"bar", 2}
+    };
+    BOOST_CHECK_EQUAL( format::sformat("{{foo}} {foo}}", values), "{foo} 1}" );
+}
+

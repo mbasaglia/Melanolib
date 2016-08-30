@@ -445,7 +445,12 @@ template<class Callback>
     while ( !input.eof() )
     {
         char next = input.next();
-        if ( next != '{' )
+        if ( (next == '{' || next == '}') && input.peek() == next )
+        {
+            input.ignore();
+            output.put(next);
+        }
+        else if ( next != '{' )
         {
             output.put(next);
         }
@@ -467,6 +472,23 @@ template<class Callback>
     return ok;
 }
 
+/**
+ * \brief Formats a template
+ * \param input Template string
+ * \param output Output stream
+ * \param callback Object used to extract the value of a placeholder
+ * \return \b true on success
+ *
+ * Normal character remain unchanged, placeholders are sorrounded by braces.
+ * Braces can be doubled to be escaped.
+ *
+ * eg: "{foo} {{bar}}"  Will expand foo but not bar.
+ *                      Double braces will become single.
+ * eg: "{foo:#02x}"     Adds some explicit formatting to foo.
+ *
+ * The template syntax is based on the Python str.format() function.
+ * \see https://docs.python.org/2/library/string.html#formatstrings
+ */
 template<class Callback>
     bool format(const std::string& input, std::ostream& output, Callback&& callback)
 {
@@ -474,6 +496,11 @@ template<class Callback>
     return format(in_stream, std::forward<Callback>(callback), output);
 }
 
+/**
+ * \brief Format into a string
+ * \see format()
+ * \return The formatted string (empty string on error)
+ */
 template<class Callback>
     std::string sformat(const std::string& input, Callback&& callback)
 {
