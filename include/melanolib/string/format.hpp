@@ -108,127 +108,205 @@ struct FormatSpec
 
 namespace detail {
 
-template<class Int>
-    std::string uint_to_string(Int value, int base, bool caps)
-{
-    if ( value == 0 )
-        return "0";
-    std::string result;
-    result.reserve(math::ceil(math::log(value, base)));
-    while ( value )
-    {
-        char digit = value % base;
-        if ( digit < 10 )
-            digit += '0';
-        else if ( caps )
-            digit += 'A' - 10;
-        else
-            digit += 'a' - 10;
-
-        result.push_back(digit);
-        value /= base;
-    }
-
-    std::reverse(result.begin(), result.end());
-
-    return result;
-}
-
-bool get_int_base(const FormatSpec& spec, int& base, std::string& prefix);
-
-void pad_num(const FormatSpec& spec, const std::string& prefix,
-             const std::string& mantissa, std::ostream& out);
-
-template<class Float>
-    int extract_exponent(Float value, int base)
+    template<class Int>
+        std::string uint_to_string(Int value, int base, bool caps)
     {
         if ( value == 0 )
-            return 0;
-        return math::floor(math::log(value, base));
+            return "0";
+        std::string result;
+        result.reserve(math::ceil(math::log(value, base)));
+        while ( value )
+        {
+            char digit = value % base;
+            if ( digit < 10 )
+                digit += '0';
+            else if ( caps )
+                digit += 'A' - 10;
+            else
+                digit += 'a' - 10;
+
+            result.push_back(digit);
+            value /= base;
+        }
+
+        std::reverse(result.begin(), result.end());
+
+        return result;
     }
 
-/**
- * \brief Rounds a decimal string
- * \returns \b true if it overflows
- */
-bool round_mantissa(std::string& mantissa, std::size_t next_pos, bool next_rounds = false);
+    bool get_int_base(const FormatSpec& spec, int& base, std::string& prefix);
 
-template<class Float>
-    std::string extract_digits(Float value, int base, std::size_t precision, int& exponent)
-{
-    std::string mantissa;
-    Float q = value / math::pow(base, exponent + 1);
-    int digit = 0;
-    for ( std::size_t i = 0; i < precision; i++ )
+    void pad_num(const FormatSpec& spec, const std::string& prefix,
+                const std::string& mantissa, std::ostream& out);
+
+    template<class Float>
+        int extract_exponent(Float value, int base)
+        {
+            if ( value == 0 )
+                return 0;
+            return math::floor(math::log(value, base));
+        }
+
+    /**
+    * \brief Rounds a decimal string
+    * \returns \b true if it overflows
+    */
+    bool round_mantissa(std::string& mantissa, std::size_t next_pos, bool next_rounds = false);
+
+    /**
+     * \brief Extracts the mantissa from a floating point value
+     * \param value     Value to format
+     * \param base      Numerical base (Only <= 10 currently supported)
+     * \param n_digits  Number of digits to extract
+     * \param exponent  Maximum value so that
+     *      \f$ \lfloor \mbox{base}^{\mbox{exponent}} \rfloor \le \mbox{value} \f$
+     * \note After rounding \p exponent might be increased.
+     * \return The mantissa as a decimal string
+     */
+    template<class Float>
+        std::string extract_digits(Float value, int base, std::size_t n_digits, int& exponent)
     {
-        Float scaled = q * base;
-        digit = math::floor(scaled);
-        q = scaled - digit;
-        mantissa += '0' + digit;
+        std::string mantissa;
+        Float q = value / math::pow(base, exponent + 1);
+        int digit = 0;
+        for ( std::size_t i = 0; i < n_digits; i++ )
+        {
+            Float scaled = q * base;
+            digit = math::floor(scaled);
+            q = scaled - digit;
+            mantissa += '0' + digit;
+        }
+
+        if ( round_mantissa(mantissa, mantissa.size(), q >= 0.5) )
+        {
+            exponent += 1;
+            mantissa.insert(mantissa.begin(), '1');
+        }
+
+        return mantissa;
     }
 
-    if ( round_mantissa(mantissa, mantissa.size(), q >= 0.5) )
+    /**
+     * \brief Formats a floating point body
+     *
+     * ie: the numerical value of the float, without sign or padding.
+     *
+     * \param format    Format as from an FormatSpec
+     * \param mantissa  Significant digits as a string
+     * \param precision Precision/number of decimal places to display
+     * \param exponent  Exponent to applu to the \p mantissa
+     * \param body      Output string.
+     */
+    void format_body(char format, std::string mantissa, std::size_t precision, int exponent, std::string& body);
+
+    /**
+     * \brief format() callback for functions, it forwards its arguments to
+     * \p generator.
+     * \param generator Object used to access the replacements
+     * \param key       Name of the value to expand
+     * \param spec      Format specification
+     * \param output    Output stream
+     * \returns the return value from \p generator, casted to \b bool.
+     */
+    template<class Generator>
+        std::enable_if_t<
+            IsCallable<Generator, bool, const std::string&, const FormatSpec&, std::ostream&>::value,
+            bool
+        >
+        format_callback(Generator&& generator, const std::string& key,
+                        const FormatSpec& spec, std::ostream& output)
     {
-        exponent += 1;
-        mantissa.insert(mantissa.begin(), '1');
+        return generator(key, spec, output);
     }
 
-    return mantissa;
-}
+    /**
+     * \brief format() callback for functions, it forwards its arguments to
+     * \p generator.
+     *
+     * This overload is selected when \p generator does not return a value
+     * convertible to bool.
+     *
+     * \param generator Object used to access the replacements
+     * \param key       Name of the value to expand
+     * \param spec      Format specification
+     * \param output    Output stream
+     * \returns \b true
+     */
+    template<class Generator>
+        std::enable_if_t<
+            !IsCallable<Generator, bool, const std::string&, const FormatSpec&, std::ostream&>::value &&
+            IsCallableAnyReturn<Generator, const std::string&, const FormatSpec&, std::ostream&>::value,
+            bool
+        >
+        format_callback(Generator&& generator, const std::string& key,
+                        const FormatSpec& spec, std::ostream& output)
+    {
+        generator(key, spec, output);
+        return true;
+    }
 
-void format_body(char format, std::string mantissa, std::size_t precision, int exponent, std::string& body);
+    /**
+     * \brief format() callback for functions, it assumes generator(key) will
+     * return the value to format.
+     * \param generator Object used to access the replacements
+     * \param key       Name of the value to expand
+     * \param spec      Format specification
+     * \param output    Output stream
+     * \returns \b true on success
+     */
+    template<class Generator>
+        std::enable_if_t<
+            !IsCallableAnyReturn<Generator, const std::string&, const FormatSpec&, std::ostream&>::value &&
+            !IsCallable<Generator, void, const std::string&>::value &&
+            IsCallableAnyReturn<Generator, const std::string&>::value,
+            bool
+        >
+        format_callback(Generator&& generator, const std::string& key,
+                        const FormatSpec& spec, std::ostream& output)
+    {
+        return format_item(spec, generator(key), output);
+    }
 
-template<class Generator>
-    std::enable_if_t<
-        IsCallable<Generator, bool, const std::string&, const FormatSpec&, std::ostream&>::value,
-        bool
-    >
-    format_callback(Generator&& generator, const std::string& key,
-                    const FormatSpec& spec, std::ostream& output)
-{
-    return generator(key, spec, output);
-}
+    /**
+     * \brief format() callback for non-functions (tries subscript)
+     * \param generator Object used to access the replacements
+     * \param key       Name of the value to expand
+     * \param spec      Format specification
+     * \param output    Output stream
+     * \returns \b true on success
+     */
+    template<class Generator>
+        std::enable_if_t<
+            !IsCallableAnyReturn<Generator, const std::string&, const FormatSpec&, std::ostream&>::value &&
+            !IsCallableAnyReturn<Generator, const std::string&>::value,
+            bool
+        >
+        format_callback(Generator&& generator, const std::string& key,
+                        const FormatSpec& spec, std::ostream& output)
+    {
+        return format_item(spec, generator[key], output);
+    }
 
-template<class Generator>
-    std::enable_if_t<
-        !IsCallable<Generator, bool, const std::string&, const FormatSpec&, std::ostream&>::value &&
-        IsCallableAnyReturn<Generator, const std::string&, const FormatSpec&, std::ostream&>::value,
-        bool
-    >
-    format_callback(Generator&& generator, const std::string& key,
-                    const FormatSpec& spec, std::ostream& output)
-{
-    generator(key, spec, output);
-    return true;
-}
-
-template<class Generator>
-    std::enable_if_t<
-        !IsCallableAnyReturn<Generator, const std::string&, const FormatSpec&, std::ostream&>::value &&
-        !IsCallable<Generator, void, const std::string&>::value &&
-        IsCallableAnyReturn<Generator, const std::string&>::value,
-        bool
-    >
-    format_callback(Generator&& generator, const std::string& key,
-                    const FormatSpec& spec, std::ostream& output)
-{
-    return format_item(spec, generator(key), output);
-}
-
-template<class Generator>
-    std::enable_if_t<
-        !IsCallableAnyReturn<Generator, const std::string&, const FormatSpec&, std::ostream&>::value &&
-        !IsCallableAnyReturn<Generator, const std::string&>::value,
-        bool
-    >
-    format_callback(Generator&& generator, const std::string& key,
-                    const FormatSpec& spec, std::ostream& output)
-{
-    return format_item(spec, generator[key], output);
-}
+    /**
+     * \brief Whether the float "g" format should use "e" (instead of "f")
+     */
+    inline static bool g_uses_exp_notation(int exponent, int precision)
+    {
+        return -4 > exponent || exponent >= int(precision);
+    }
 
 } // namespace detail
 
+/**
+ * \brief Default formatting
+ * \param spec  Format specification
+ * \param value Value to format
+ * \param out   Output stream
+ * \return \b true on success
+ *
+ * This is the fallback if no other overload is found,
+ * it uses the stream operator<< for the given value.
+ */
 template<class T>
     std::enable_if_t<!std::is_arithmetic<std::remove_reference_t<T>>::value, bool>
     format_item(const FormatSpec& spec, T&& value, std::ostream& out)
@@ -240,6 +318,16 @@ template<class Float>
     std::enable_if_t<std::is_floating_point<std::remove_reference_t<Float>>::value, bool>
     format_item(const FormatSpec& spec, Float value, std::ostream& out);
 
+/**
+ * \brief Formats a single integer
+ * \param spec  Format specification
+ * \param value Value to format
+ * \param out   Output stream
+ * \return \b true on success
+ *
+ * If \p spec contains an float format, \p value will be truncated and
+ * formatted as a float.
+ */
 template<class T>
     std::enable_if_t<std::is_integral<std::remove_reference_t<T>>::value, bool>
     format_item(const FormatSpec& spec, T value, std::ostream& out)
@@ -275,11 +363,18 @@ template<class T>
     return true;
 }
 
-inline static bool g_uses_exp_notation(int exponent, int precision)
-{
-    return -4 > exponent || exponent >= int(precision);
-}
-
+/**
+ * \brief Formats a single floating point number
+ * \param spec  Format specification
+ * \param value Value to format
+ * \param out   Output stream
+ * \return \b true on success
+ *
+ * If \p spec contains an integer format, \p value will be truncated and
+ * formatted as an integer.
+ *
+ * Not a number values are formatted as "NaN", infinity as "Inf".
+ */
 template<class Float>
     std::enable_if_t<std::is_floating_point<std::remove_reference_t<Float>>::value, bool>
     format_item(const FormatSpec& spec, Float value, std::ostream& out)
@@ -330,7 +425,7 @@ template<class Float>
         bool exp_notation =  ascii::to_lower(spec.format) == 'e';
 
         if ( std::tolower(spec.format) == 'g' || std::tolower(spec.format) == 'n' )
-            exp_notation = g_uses_exp_notation(exponent, precision);
+            exp_notation = detail::g_uses_exp_notation(exponent, precision);
 
         std::size_t digit_count = precision;
         if ( exp_notation )
@@ -356,13 +451,37 @@ template<class Float>
     return true;
 }
 
+/**
+ * \brief Formats a single string
+ * \param spec  Format specification
+ * \param value Value to format
+ * \param out   Output stream
+ * \return \b true on success
+ */
 bool format_item(const FormatSpec& spec, std::string value, std::ostream& out);
 
+/**
+ * \brief Formats a single string
+ * \param spec  Format specification
+ * \param value Value to format
+ * \param out   Output stream
+ * \return \b true on success
+ */
 inline bool format_item(const FormatSpec& spec, const char* value, std::ostream& out)
 {
     return format_item(spec, std::string(value), out);
 }
 
+/**
+ * \brief Formats a single character
+ * \param spec  Format specification
+ * \param value Value to format
+ * \param out   Output stream
+ * \return \b true on success
+ *
+ * By default uses string formatting, if \p spec contains an integer format,
+ * it will be formatted as an integer.
+ */
 inline bool format_item(const FormatSpec& spec, char value, std::ostream& out)
 {
     if ( spec.type_string() || spec.type_char() || spec.type_auto() )
@@ -421,6 +540,21 @@ template<class Head, class... Args>
     return false;
 }
 
+/**
+ * \brief Formats a template
+ * \param input     Template string
+ * \param output    Output stream
+ * \param args      Values to expand
+ * \return \b true on success
+ *
+ * Normal character remain unchanged, format specifiers are introduced by %.
+ * The percent sing can be doubled to be escaped.
+ *
+ * eg: "%.2f%%" will expand to something like "74.39%"
+ *
+ * The format specification syntax is based on the Python str.format() function.
+ * \see https://docs.python.org/2/library/string.html#formatspec
+ */
 template<class... Args>
     bool printf(const std::string& input, std::ostream& output, Args&&... args)
 {
@@ -428,6 +562,11 @@ template<class... Args>
     return printf(in_stream, output, std::forward<Args>(args)...);
 }
 
+/**
+ * \brief printf into a string
+ * \see printf()
+ * \return The formatted string (empty string on error)
+ */
 template<class... Args>
     std::string sprintf(const std::string& input, Args&&... args)
 {

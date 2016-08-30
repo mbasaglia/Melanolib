@@ -185,7 +185,7 @@ void format_body(char format, std::string mantissa,
 
     if ( fmt == 'g' || fmt == 'n' )
     {
-        if ( g_uses_exp_notation(exponent, precision) )
+        if ( detail::g_uses_exp_notation(exponent, precision) )
             fmt = 'e';
         else
             fmt = 'f';
