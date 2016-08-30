@@ -25,6 +25,11 @@ namespace melanolib {
 namespace string {
 namespace format {
 
+static constexpr bool is_aligmnent(int ch)
+{
+    return ch == '<' || ch == '>' || ch == '^' || ch == '=';
+}
+
 FormatSpec FormatSpec::parse(QuickStream& stream)
 {
     FormatSpec out;

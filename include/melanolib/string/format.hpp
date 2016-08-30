@@ -32,75 +32,102 @@ namespace melanolib {
 namespace string {
 namespace format {
 
+/**
+ * \brief Format specification
+ */
 struct FormatSpec
 {
+    /**
+     * \brief Alignment direction
+     */
     enum class Alignment
     {
-        Default = 0,
-        Left    = '<',
-        Right   = '>',
-        Center  = '^',
-        Sign    = '=',
+        Default = 0,    ///< Natural alignment for the given type/format
+        Left    = '<',  ///< Text to the left, padding to the right
+        Right   = '>',  ///< Text to the right, padding to the left
+        Center  = '^',  ///< Text in the middle, padding on both sides
+        Sign    = '=',  ///< (For numbers) padding between sign (or prefix) and the rest
     };
 
+    /**
+     * \brief Visibility of the sign for positive numbers
+     */
     enum class PositiveSign
     {
-        None  = '-',
-        Plus  = '+',
-        Space = ' ',
+        None  = '-',    ///< None
+        Plus  = '+',    ///< Shows a "+"
+        Space = ' ',    ///< Shows a single space
     };
 
-    char            fill_char = ' ';
-    Alignment       alignment = Alignment::Default;
-    PositiveSign    positive_sign = PositiveSign::None;
-    bool            base_prefix = false;
-    std::size_t     width = 0;
+    char            fill_char = ' ';                    ///< Character used for padding
+    Alignment       alignment = Alignment::Default;     ///< Alignment directrion
+    PositiveSign    positive_sign = PositiveSign::None; ///< Visibility of the positive sign
+    bool            base_prefix = false;                ///< Whether to show base prefix for integers
+    std::size_t     width = 0;                          ///< Minimum width (enables padding)
+    /// Maximum width for string and floating point precision
     std::size_t     precision = std::numeric_limits<std::size_t>::max();
-    char            format = ' ';
+    char            format = ' ';                       ///< Format specifier
 
-    static constexpr bool is_aligmnent(int ch)
-    {
-        return ch == '<' || ch == '>' || ch == '^' || ch == '=';
-    }
-
+    /**
+     * \brief The format represents automatic/default formatting
+     */
     bool type_auto() const
     {
         return format == ' ';
     }
 
+    /**
+     * \brief The format represents a string
+     */
     bool type_string() const
     {
         return format == 's';
     }
 
+    /**
+     * \brief The format represents a character
+     */
     bool type_char() const
     {
         return format == 'c';
     }
 
+    /**
+     * \brief The format represents an integer number
+     */
     bool type_int() const
     {
         return format == 'd' || format == 'i' || format == 'o' ||
                format == 'b' || format == 'x' || format == 'X';
     }
 
+    /**
+     * \brief The format represents a floating-point number
+     */
     bool type_float() const
     {
         char fmt = ascii::to_lower(format);
         return fmt == 'e' || fmt == 'g' || fmt == 'f' || fmt == '%';
     }
 
+    /**
+     * \brief The format represents number in its natural format
+     */
     bool type_auto_number() const
     {
         return ascii::to_lower(format) == 'n';
     }
 
+    /**
+     * \brief The format represents any number
+     */
     bool type_numeric() const
     {
-        return type_float() || type_int();
+        return type_float() || type_int() || type_auto_number();
     }
 
     /**
+     * \brief Parses a format specifier
      * \see https://docs.python.org/2/library/string.html#format-specification-mini-language
      */
     static FormatSpec parse(QuickStream& stream);
@@ -108,6 +135,14 @@ struct FormatSpec
 
 namespace detail {
 
+    /**
+     * \brief Converts a non-negative integer into a string
+     * \param value The value to be converted
+     * \param base  Base to represent the number in
+     * \param caps  Whether the alphabetic values should be uppercase
+     * \returns \p value formatted in base \p base
+     * \pre \p value >= 0 && \p base > 1 && \p base <= 36
+     */
     template<class Int>
         std::string uint_to_string(Int value, int base, bool caps)
     {
@@ -134,11 +169,36 @@ namespace detail {
         return result;
     }
 
+    /**
+     * \brief Extracts the numeric base from \p spec
+     * \param[in]  spec     Format specification
+     * \param[out] base     Resulting base
+     * \param[out] prefix   If \p spec requires it, the base prefix will be
+     *                      appended to it
+     * \returns \b true on success
+     */
     bool get_int_base(const FormatSpec& spec, int& base, std::string& prefix);
 
+    /**
+     * \brief Inserts a number into \p out, padding it as from \p spec
+     * \param spec      Format specification
+     * \param prefix    Prefix, might contain sign and number base
+     *                  (Depending on \p spec, might be separated from
+     *                  \p mantissa by some padding)
+     * \param mantissa  Main body of the number, already formatted.
+     * \param out       Output stream
+     */
     void pad_num(const FormatSpec& spec, const std::string& prefix,
                 const std::string& mantissa, std::ostream& out);
 
+    /**
+     * \brief Finds the exponent for \p value in the given \p base
+     * \param value Value to be examined
+     * \param base  Numerical base to represent \p value
+     * \pre \p base > 1
+     * \returns The maximum value so that
+     *      \f$ \lfloor \mbox{base}^{\mbox{exponent}} \rfloor \le \mbox{value} \f$
+     */
     template<class Float>
         int extract_exponent(Float value, int base)
         {
