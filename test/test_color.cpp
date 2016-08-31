@@ -218,6 +218,25 @@ BOOST_AUTO_TEST_CASE( test_blend )
     BOOST_CHECK_EQUAL(a.blend(b, 1), b);
 }
 
+BOOST_AUTO_TEST_CASE( test_blend_hsv )
+{
+    Color a(repr::HSVf(0.2, 1, 0.4));
+    Color b(repr::HSVf(0.4, 0.8, 0.8));
+    BOOST_CHECK_EQUAL(a.blend<repr::HSVf>(b), Color(repr::HSVf(0.3, 0.9, 0.6)));
+    BOOST_CHECK_EQUAL(a.blend<repr::HSVf>(b, 0), a);
+    BOOST_CHECK_EQUAL(a.blend<repr::HSVf>(b, 1), b);
+}
+
+
+BOOST_AUTO_TEST_CASE( test_blend_int )
+{
+    Color a(repr::RGB_int12(0x123));
+    Color b(repr::RGB_int12(0xfab));
+    BOOST_CHECK_EQUAL(a.blend<repr::RGB_int12>(b), Color(repr::RGB_int12(0x867)));
+    BOOST_CHECK_EQUAL(a.blend<repr::RGB_int12>(b, 0), a);
+    BOOST_CHECK_EQUAL(a.blend<repr::RGB_int12>(b, 1), b);
+}
+
 BOOST_AUTO_TEST_CASE( test_rgb_int24 )
 {
     BOOST_CHECK_EQUAL(Color(0x12, 0x23, 0x34).to<repr::RGB_int24>().rgb, 0x122334);

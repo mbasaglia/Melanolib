@@ -114,6 +114,11 @@ struct RGB_int24
     {
         return (alpha << 24) | rgb;
     }
+
+    constexpr uint64_t vec() const
+    {
+        return rgb;
+    }
 };
 
 /**
@@ -132,6 +137,11 @@ struct RGB_int12
     constexpr uint16_t argb(uint8_t alpha = 0xf) const
     {
         return (alpha << 12) | rgb;
+    }
+
+    constexpr uint32_t vec() const
+    {
+        return rgb;
     }
 };
 
@@ -172,6 +182,11 @@ struct RGB_int3
     constexpr uint8_t rgb() const
     {
         return color & 0b0111;
+    }
+
+    constexpr uint16_t vec() const
+    {
+        return color;
     }
 };
 
