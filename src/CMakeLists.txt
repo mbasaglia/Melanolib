@@ -31,9 +31,8 @@ function(add_melano_lib name)
 endfunction()
 
 add_library(melano INTERFACE)
-target_link_libraries(melano INTERFACE melano_random melano_dynlib melano_stringutils melano_time)
+target_link_libraries(melano INTERFACE melano_dynlib melano_stringutils melano_time melano_color)
 
-add_subdirectory(math)
 add_subdirectory(string)
 add_subdirectory(time)
 add_subdirectory(dynlib)

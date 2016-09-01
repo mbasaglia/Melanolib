@@ -20,29 +20,83 @@
  */
 #ifndef MELANOLIB_MATH_RANDOM_HPP
 #define MELANOLIB_MATH_RANDOM_HPP
+
+#include <random>
+
 namespace melanolib {
 
 namespace math {
 
+namespace detail {
+
+/// PRNG device
+inline std::random_device& random_device()
+{
+    thread_local static std::random_device random_device;
+}
+
+} // namespace detail
+
 /**
  * \brief Get a uniform random integer
  */
-long random();
-
-/**
- * \brief Get a uniform random integer between 0 and \c max (inclusive)
- */
-long random(long max);
+template<class Int>
+    Int random()
+    {
+        return std::uniform_int_distribution<Int>()(detail::random_device());
+    }
 
 /**
  * \brief Get a uniform random integer between \c min and \c max (inclusive)
  */
-long random(long min, long max);
+template<class Int>
+    Int random(Int min, Int max)
+    {
+        return std::uniform_int_distribution<Int>(min, max)(detail::random_device());
+    }
+
+/**
+ * \brief Get a uniform random integer between 0 and \c max (inclusive)
+ */
+template<class Int>
+    Int random(Int max)
+    {
+        return random<Int>(0, max);
+    }
+
+/**
+ * \brief Get a uniform random integer
+ */
+inline long random()
+{
+    return random<long>();
+}
+
+/**
+ * \brief Get a uniform random integer between \c min and \c max (inclusive)
+ */
+long random(long min, long max)
+{
+    return random<long>(min, max);
+}
 
 /**
  * \brief Get a uniform random number between 0 and 1
  */
-double random_real();
+template<class Float>
+Float random_real()
+{
+    return std::uniform_real_distribution<Float>(detail::random_device());
+}
+
+/**
+ * \brief Get a uniform random number between 0 and 1
+ */
+inline double random_real()
+{
+    return random_real<double>();
+}
+
 
 } // namespace math
 } // namespace melanolib
