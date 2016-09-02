@@ -33,6 +33,7 @@ namespace detail {
 inline std::random_device& random_device()
 {
     thread_local static std::random_device random_device;
+    return random_device;
 }
 
 } // namespace detail
@@ -75,7 +76,7 @@ inline long random()
 /**
  * \brief Get a uniform random integer between \c min and \c max (inclusive)
  */
-long random(long min, long max)
+inline long random(long min, long max)
 {
     return random<long>(min, max);
 }
@@ -86,7 +87,7 @@ long random(long min, long max)
 template<class Float>
 Float random_real()
 {
-    return std::uniform_real_distribution<Float>(detail::random_device());
+    return std::uniform_real_distribution<Float>()(detail::random_device());
 }
 
 /**
