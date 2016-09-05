@@ -190,6 +190,14 @@ struct RGB_int3
     }
 };
 
+
+template<class Repr>
+    constexpr Repr blend(const Repr& first, const Repr& second, float factor = 0.5)
+{
+    using namespace melanolib::math;
+    return Repr(linear_interpolation(first.vec(), second.vec(), factor));
+}
+
 } // namespace repr
 
 class Color
@@ -300,7 +308,7 @@ public:
     {
         using namespace melanolib::math;
         return Color(
-            Repr(linear_interpolation(to<Repr>().vec(), oth.to<Repr>().vec(), factor)),
+            repr::blend(to<Repr>(), oth.to<Repr>(), factor),
             linear_interpolation(alpha_float(), oth.alpha_float(), factor)
         );
     }
@@ -625,6 +633,12 @@ inline float Color::distance(const Color& oth) const
 {
     return delta_e(to<repr::Lab>(), oth.to<repr::Lab>());
 }
+
+template<class Repr=repr::RGBf>
+    constexpr Color blend(const Color& a, const Color& b, float factor = 0.5)
+    {
+        return a.blend<Repr>(b, factor);
+    }
 
 } // namespace color
 } // namespace melanolib

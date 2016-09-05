@@ -44,6 +44,7 @@ if (BUILD_TESTING)
     test_target(test_type_utils)
     test_target(test_color melano_color)
     test_target(test_format melano_stringutils)
+    test_target(test_color_range melano_color)
 
 else()
     message(STATUS "Test targets disabled")
