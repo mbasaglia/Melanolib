@@ -44,6 +44,8 @@ struct RGB
 
     constexpr RGB(uint8_t r, uint8_t g, uint8_t b) : r(r), g(g), b(b) {}
     constexpr RGB() : r(0), g(0), b(0) {}
+    constexpr RGB(const math::Vec3<uint8_t>& v) : r(v[0]), g(v[1]), b(v[2]) {}
+    constexpr math::Vec3<uint8_t> vec() const { return {r, g, b}; }
 };
 
 /**
