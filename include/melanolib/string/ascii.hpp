@@ -22,6 +22,7 @@
 #define MELANOLIB_STRING_ASCII_HPP
 
 #include <cstdint>
+#include "melanolib/utils/c++-compat.hpp"
 
 namespace melanolib {
 namespace string {
@@ -195,7 +196,7 @@ inline constexpr int get_hex(char ch)
  *
  * Equivalent to std::toupper
  */
-inline constexpr char to_upper(char c)
+inline SUPER_CONSTEXPR char to_upper(char c)
 {
     if ( is_lower(c) )
         return c - 'a' + 'A';
@@ -207,7 +208,7 @@ inline constexpr char to_upper(char c)
  *
  * Equivalent to std::tolower
  */
-inline constexpr char to_lower(char c)
+inline SUPER_CONSTEXPR char to_lower(char c)
 {
     if ( is_upper(c) )
         return c - 'A' + 'a';
