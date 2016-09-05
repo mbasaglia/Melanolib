@@ -21,7 +21,11 @@
 #ifndef MELANOLIB_MATH_VECTOR_HPP
 #define MELANOLIB_MATH_VECTOR_HPP
 
+#include <algorithm>
 #include <iterator>
+#include <limits>
+
+#include "melanolib/math/math.hpp"
 
 namespace melanolib {
 namespace math {
@@ -253,6 +257,32 @@ template<class T>
     using Vec3 = Vector<T, 3>;
 
 using Vec3f = Vector<float, 3>;
+
+template<class T, std::size_t Size>
+    typename Vector<T, Size>::value_type p_norm(
+        const Vector<T, Size>& vec,
+        typename Vector<T, Size>::value_type p)
+    {
+        using value_type = typename Vector<T, Size>::value_type;
+        if ( p == std::numeric_limits<value_type>::infinity() )
+            return *std::max_element(vec.begin(), vec.end());
+        return math::pow(
+            std::accumulate(vec.begin(), vec.end(), value_type(0),
+                [p](value_type a, value_type b){
+                    return a + math::pow(math::abs(b), p);
+                }),
+            value_type(1) / p
+        );
+    }
+
+template<class T, std::size_t Size>
+    typename Vector<T, Size>::value_type distance(
+        const Vector<T, Size>& a,
+        const Vector<T, Size>& b,
+        typename Vector<T, Size>::value_type p = 2)
+    {
+        return p_norm(b - a, p);
+    }
 
 } // namespace math
 } // namespace melanolib

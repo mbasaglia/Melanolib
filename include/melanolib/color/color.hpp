@@ -82,7 +82,7 @@ struct Lab
 
     constexpr Lab(float l, float a, float b) : l(l), a(a), b(b) {}
     constexpr Lab(const melanolib::math::Vec3f& v) : l(v[0]), a(v[1]), b(v[2]) {}
-    constexpr melanolib::math::Vec3f vec() const { return {l, b, b}; }
+    constexpr melanolib::math::Vec3f vec() const { return {l, a, b}; }
 };
 
 /**
@@ -622,11 +622,7 @@ template<>
  */
 inline float delta_e(const repr::Lab& a, const repr::Lab& b)
 {
-    return melanolib::math::sqrt(
-        melanolib::math::pow(a.l - b.l, 2) +
-        melanolib::math::pow(a.a - b.a, 2) +
-        melanolib::math::pow(a.b - b.b, 2)
-    );
+    return melanolib::math::distance(a.vec(), b.vec());
 }
 
 inline float Color::distance(const Color& oth) const
