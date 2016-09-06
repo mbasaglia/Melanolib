@@ -34,7 +34,32 @@ template<class Container>
         {
             return std::size(container);
         }
+
+        bool operator==(const ContainerSize&) const
+        {
+            return true;
+        }
     };
+
+struct ConstantSize
+{
+    ConstantSize(std::size_t size = 0)
+        : size(size)
+    {}
+
+    template<class Container>
+        auto operator()(const Container& container) const
+        {
+            return size;
+        }
+
+    bool operator==(const ConstantSize& oth) const
+    {
+        return size == oth.size;
+    }
+
+    std::size_t size;
+};
 
 template<class Range, class SizeFunctor=ContainerSize<Range>>
 class ColorIterator
@@ -137,7 +162,7 @@ public:
     constexpr bool operator==(const ColorIterator& oth) const
     {
         return (!valid() && !oth.valid()) ||
-                (range == oth.range && offset == oth.offset);
+               (range == oth.range && offset == oth.offset && size == oth.size);
     }
 
     constexpr bool operator!=(const ColorIterator& oth) const
