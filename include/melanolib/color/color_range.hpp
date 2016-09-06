@@ -23,6 +23,7 @@
 
 #include <iterator>
 #include "melanolib/color/color.hpp"
+#include "melanolib/color/color_iterator.hpp"
 
 namespace melanolib {
 namespace color {
@@ -31,156 +32,9 @@ template<class Repr=Color>
     class BasicColorRange
 {
 public:
-    using size_type = std::size_t;
-    class iterator
-    {
-    public:
-        using value_type = Repr;
-        using reference = const value_type&;
-        using pointer = const value_type*;
-        using difference_type =  std::ptrdiff_t;
-        using iterator_category = std::random_access_iterator_tag;
-
-        constexpr iterator() : iterator(nullptr, 0) {}
-
-        constexpr value_type operator*() const
-        {
-            return color();
-        }
-
-        constexpr iterator& operator++()
-        {
-            if ( offset < range->size() )
-                offset += 1;
-            return *this;
-        }
-
-        constexpr iterator operator++(int)
-        {
-            auto iter = *this;
-            ++*this;
-            return iter;
-        }
-
-        constexpr iterator& operator--()
-        {
-            if ( offset > 0 )
-                offset -= 1;
-            return *this;
-        }
-
-        constexpr iterator operator--(int)
-        {
-            auto iter = *this;
-            --*this;
-            return iter;
-        }
-
-        constexpr iterator& operator+=(difference_type off)
-        {
-            if ( off > 0 )
-            {
-                if ( offset + off > range->size() )
-                    offset = range->size();
-                else
-                    offset += off;
-            }
-            else
-            {
-                if ( size_type(-off) < offset )
-                    offset += off;
-                else
-                    offset = 0;
-            }
-
-            return *this;
-        }
-
-        constexpr iterator operator+(difference_type off) const
-        {
-            auto iter = *this;
-            return iter += off;
-        }
-
-        friend constexpr iterator operator+(difference_type off, iterator iter)
-        {
-            return iter += off;
-        }
-
-        constexpr iterator& operator-=(difference_type off)
-        {
-            return *this += -off;
-        }
-
-        constexpr iterator operator-(difference_type off) const
-        {
-            auto iter = *this;
-            return iter -= off;
-        }
-
-        constexpr difference_type operator-(const iterator& oth) const
-        {
-            return offset - oth.offset;
-        }
-
-        constexpr value_type operator[](difference_type off) const
-        {
-            return *(*this + off);
-        }
-
-        constexpr bool operator==(const iterator& oth) const
-        {
-            return (!valid() && !oth.valid()) ||
-                   (range == oth.range && offset == oth.offset);
-        }
-
-        constexpr bool operator!=(const iterator& oth) const
-        {
-            return !(*this == oth);
-        }
-
-        constexpr bool valid() const
-        {
-            return range && offset <= range->size();
-        }
-
-        constexpr bool operator<(const iterator& oth) const
-        {
-            return offset < oth.offset;
-        }
-
-        constexpr bool operator<=(const iterator& oth) const
-        {
-            return offset <= oth.offset;
-        }
-
-        constexpr bool operator>(const iterator& oth) const
-        {
-            return offset > oth.offset;
-        }
-
-        constexpr bool operator>=(const iterator& oth) const
-        {
-            return offset >= oth.offset;
-        }
-
-    private:
-        iterator(const BasicColorRange* range, size_type offset)
-            : range(range), offset(offset)
-        {}
-
-        constexpr value_type color() const
-        {
-            using namespace repr;
-            if ( range->size() < 2 )
-                return range->first;
-            return blend(range->first, range->second, double(offset) / (range->count - 1));
-        }
-
-        const BasicColorRange* range;
-        size_type offset;
-        friend BasicColorRange;
-    };
+    using iterator = ColorIterator<BasicColorRange, Repr>;
+    using value_type = typename iterator::value_type;
+    using size_type = typename iterator::size_type;
 
     constexpr BasicColorRange(Repr first, Repr second, size_type count)
     : first(first), second(second), count(count)
@@ -198,17 +52,27 @@ public:
 
     constexpr iterator begin() const
     {
-        return iterator(this, 0);
+        return iterator::begin(*this);
     }
 
     constexpr iterator end() const
     {
-        return iterator(this, count);
+        return iterator::end(*this);
     }
 
-    constexpr typename iterator::value_type operator[](size_type off) const
+    constexpr value_type operator[](size_type off) const
     {
         return begin()[off];
+    }
+
+    constexpr value_type color(float factor) const
+    {
+        using namespace repr;
+        if ( size() < 2 || factor < 0 )
+            return first;
+        if ( factor > 1 )
+            return second;
+        return blend(first, second, factor);
     }
 
 private:
