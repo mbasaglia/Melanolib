@@ -32,8 +32,8 @@ template<class Repr=Color>
     class BasicColorRange
 {
 public:
-    using iterator = ColorIterator<BasicColorRange, Repr>;
-    using value_type = typename iterator::value_type;
+    using value_type = Repr;
+    using iterator = ColorIterator<BasicColorRange>;
     using size_type = typename iterator::size_type;
 
     constexpr BasicColorRange(Repr first, Repr second, size_type count)
@@ -52,12 +52,12 @@ public:
 
     constexpr iterator begin() const
     {
-        return iterator::begin(*this);
+        return color::begin(*this);
     }
 
     constexpr iterator end() const
     {
-        return iterator::end(*this);
+        return color::end(*this);
     }
 
     constexpr value_type operator[](size_type off) const

@@ -22,22 +22,32 @@
 #define MELANOLIB_COLOR_ITERATOR_HPP
 
 #include <iterator>
+#include "melanolib/utils/c++-compat.hpp"
 
 namespace melanolib {
 namespace color {
 
-template<class Range, class Repr>
+template<class Container>
+    struct ContainerSize
+    {
+        auto operator()(const Container& container) const
+        {
+            return std::size(container);
+        }
+    };
+
+template<class Range, class SizeFunctor=ContainerSize<Range>>
 class ColorIterator
 {
 public:
     using size_type = std::size_t;
-    using value_type = Repr;
+    using value_type = typename Range::value_type;
     using reference = const value_type&;
     using pointer = const value_type*;
     using difference_type =  std::ptrdiff_t;
     using iterator_category = std::random_access_iterator_tag;
 
-    constexpr ColorIterator() : ColorIterator(nullptr, 0) {}
+    constexpr ColorIterator() : ColorIterator(nullptr, 0, SizeFunctor{}) {}
 
     constexpr value_type operator*() const
     {
@@ -46,7 +56,7 @@ public:
 
     constexpr ColorIterator& operator++()
     {
-        if ( offset < range->size() )
+        if ( offset < size(*range) )
             offset += 1;
         return *this;
     }
@@ -76,8 +86,8 @@ public:
     {
         if ( off > 0 )
         {
-            if ( offset + off > range->size() )
-                offset = range->size();
+            if ( offset + off > size(*range) )
+                offset = size(*range);
             else
                 offset += off;
         }
@@ -137,7 +147,7 @@ public:
 
     constexpr bool valid() const
     {
-        return range && offset <= range->size();
+        return range && offset <= size(*range);
     }
 
     constexpr bool operator<(const ColorIterator& oth) const
@@ -160,29 +170,44 @@ public:
         return offset >= oth.offset;
     }
 
-    static constexpr ColorIterator begin(const Range& range)
-    {
-        return ColorIterator(&range, 0);
-    }
-
-    static constexpr ColorIterator end(const Range& range)
-    {
-        return ColorIterator(&range, range.size());
-    }
-
 private:
-    constexpr ColorIterator(const Range* range, size_type offset)
-        : range(range), offset(offset)
+    constexpr ColorIterator(const Range* range, size_type offset, SizeFunctor size)
+        : range(range), offset(offset), size(size)
     {}
 
     constexpr value_type color() const
     {
-        return range->color(double(offset) / (range->size() - 1));
+        return range->color(double(offset) / (size(*range) - 1));
     }
 
     const Range* range;
     size_type offset;
+    SizeFunctor size;
+
+    template<class FRange, class FSizeFunctor>
+        friend constexpr ColorIterator<FRange, FSizeFunctor>
+            begin(const FRange& range, const FSizeFunctor& size);
+
+
+    template<class FRange, class FSizeFunctor>
+        friend constexpr ColorIterator<FRange, FSizeFunctor>
+            end(const FRange& range, const FSizeFunctor& size);
+
 };
+
+template<class Range,class SizeFunc=ContainerSize<Range>>
+    constexpr ColorIterator<Range, SizeFunc>
+    begin(const Range& range, const SizeFunc& size = {})
+    {
+        return ColorIterator<Range, SizeFunc>(&range, 0, size);
+    }
+
+template<class Range, class SizeFunc=ContainerSize<Range>>
+    constexpr ColorIterator<Range, SizeFunc>
+    end(const Range& range, const SizeFunc& size = {})
+    {
+        return ColorIterator<Range, SizeFunc>(&range, size(range), size);
+    }
 
 } // namespace color
 } // namespace melanolib

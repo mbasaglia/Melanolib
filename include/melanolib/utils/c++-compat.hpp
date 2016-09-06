@@ -104,4 +104,21 @@ auto New (Args&&... args)
 
 } // namespace melanolib
 
+#if __cplusplus <= 201402L // C++17
+namespace std {
+
+template <class Container>
+    constexpr auto size(const Container& container) -> decltype(container.size())
+    {
+        return container.size();
+    }
+
+template <class T, std::size_t Size>
+    constexpr std::size_t size(const T (&array)[Size]) noexcept
+    {
+        return Size;
+    }
+} // namespace std
+#endif // C++17
+
 #endif // MELANOLIB_CXX_COMPAT_HPP
