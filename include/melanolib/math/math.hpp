@@ -232,11 +232,9 @@ template<class Real>
  * \post value in [min_value, max_value]
  */
 template<class Argument>
-    constexpr auto bound(Argument&& min_value, Argument&& value, Argument&& max_value)
+    constexpr auto bound(Argument min_value, Argument value, Argument max_value)
     {
-        return max(std::forward<Argument>(min_value),
-            min(std::forward<Argument>(value), std::forward<Argument>(max_value))
-        );
+        return max(min_value, min(value, max_value));
     }
 
 template<class Argument, class Arg2, class = std::enable_if_t<!std::is_same<Argument, Arg2>::value>>

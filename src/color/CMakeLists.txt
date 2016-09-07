@@ -13,5 +13,5 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-add_melano_lib(melano_color SHARED color.cpp)
+add_melano_lib(melano_color color.cpp)
 target_link_libraries(melano_color melano_stringutils)
