@@ -26,6 +26,7 @@
 #include <string>
 #include <sstream>
 #include <unordered_map>
+#include <mutex>
 
 #include "melanolib/math/random.hpp"
 #include "melanolib/math/math.hpp"
@@ -151,27 +152,19 @@ public:
      */
     void cleanup();
 
-    void set_max_size(std::size_t entries)
-    {
-        max_size = entries;
-        if ( chain.size() > entries )
-            cleanup();
-    }
+    void set_max_size(std::size_t entries);
 
-    void set_max_age(time::days days)
-    {
-        max_age = days;
-    }
+    void set_max_age(time::days days);
 
 private:
 
     /**
      * \brief Uses \p prefix to generate words into \p words
      */
-    void generate_words(Prefix prefix,
-                        std::size_t min_words,
-                        std::size_t max_words,
-                        std::vector<std::string>& words) const;
+    void generate_words_unlocked(Prefix prefix,
+                                 std::size_t min_words,
+                                 std::size_t max_words,
+                                 std::vector<std::string>& words) const;
 
     /**
      * \brief Selects an iterator matching \p prefix
@@ -189,6 +182,11 @@ private:
     }
 
     /**
+     * \see cleanup()
+     */
+    void cleanup_unlocked();
+
+    /**
      * \brief Looks at the beginning of \p words and tracks back until
      *        \p max_words or a delimiter is found
      */
@@ -199,6 +197,7 @@ private:
     std::size_t max_size;
     time::days max_age;
     Clock::time_point last_cleanup = Clock::time_point::min();
+    mutable std::mutex mutex;
 };
 
 } // namespace string

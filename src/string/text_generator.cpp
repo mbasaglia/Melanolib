@@ -28,6 +28,7 @@ namespace string {
 
 void TextGenerator::add_text(std::istream& stream)
 {
+    std::lock_guard<std::mutex> lock(mutex);
     Prefix prefix(prefix_size);
     std::string word;
     Chain::iterator last = chain.end();
@@ -60,7 +61,7 @@ void TextGenerator::add_text(std::istream& stream)
 
             // Ensure we don't exceed the maximum size
             if ( chain.size() > max_size )
-                cleanup();
+                cleanup_unlocked();
         }
     }
 
@@ -72,9 +73,10 @@ std::vector<std::string> TextGenerator::generate_words(
     std::size_t min_words,
     std::size_t max_words) const
 {
+    std::lock_guard<std::mutex> lock(mutex);
     std::vector<std::string> words;
     words.reserve(min_words);
-    generate_words(Prefix(prefix_size), min_words, max_words, words);
+    generate_words_unlocked(Prefix(prefix_size), min_words, max_words, words);
     return words;
 }
 
@@ -83,16 +85,22 @@ std::vector<std::string> TextGenerator::generate_words(
     std::size_t min_words,
     std::size_t max_words) const
 {
-
+    std::lock_guard<std::mutex> lock(mutex);
     std::vector<std::string> words;
     words.reserve(min_words);
     words.push_back(prompt);
     Prefix prefix = walk_back(max_words/2, words);
-    generate_words(prefix, min_words, max_words, words);
+    generate_words_unlocked(prefix, min_words, max_words, words);
     return words;
 }
 
 void TextGenerator::cleanup()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    cleanup_unlocked();
+}
+
+void TextGenerator::cleanup_unlocked()
 {
     auto now = Clock::now();
     auto death = Clock::now() - max_age;
@@ -122,10 +130,25 @@ void TextGenerator::cleanup()
     last_cleanup = now;
 }
 
-void TextGenerator::generate_words(Prefix prefix,
-                                   std::size_t min_words,
-                                   std::size_t max_words,
-                                   std::vector<std::string>& words) const
+void TextGenerator::set_max_size(std::size_t entries)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    max_size = entries;
+    if ( chain.size() > entries )
+        cleanup_unlocked();
+}
+
+void TextGenerator::set_max_age(time::days days)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    max_age = days;
+}
+
+void TextGenerator::generate_words_unlocked(
+    Prefix prefix,
+    std::size_t min_words,
+    std::size_t max_words,
+    std::vector<std::string>& words) const
 {
     while ( words.size() < max_words )
     {
