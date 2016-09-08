@@ -31,6 +31,7 @@
 #include "melanolib/math/random.hpp"
 #include "melanolib/string/simple_stringutils.hpp"
 #include "melanolib/time/units.hpp"
+#include "melanolib/data_structures/hash.hpp"
 
 namespace melanolib {
 namespace string {
@@ -61,12 +62,9 @@ class TextGenerator
 
     struct PrefixHasher
     {
-        size_t operator()(const Prefix& prefix) const
+        std::size_t operator()(const Prefix& prefix) const
         {
-            std::hash<std::string> hasher;
-            std::size_t hash = hasher(strtolower(prefix.first));
-            hash ^= hasher(strtolower(prefix.second)) + 0x9e3779b9 + (hash<<6) + (hash>>2);
-            return hash;
+            return multi_hash(prefix.first, prefix.second);
         }
     };
 
