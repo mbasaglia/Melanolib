@@ -22,6 +22,9 @@
 
 #include "melanolib/string/text_generator.hpp"
 
+#include "melanolib/math/math.hpp"
+#include "melanolib/string/stringutils.hpp"
+
 namespace melanolib {
 namespace string {
 
@@ -86,11 +89,13 @@ std::vector<std::string> TextGenerator::generate_words(
     std::size_t max_words) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    std::vector<std::string> words;
-    words.reserve(min_words);
-    words.push_back(prompt);
-    Prefix prefix = walk_back(max_words/2, words);
-    generate_words_unlocked(prefix, min_words, max_words, words);
+    std::vector<std::string> words = regex_split(prompt, "\\s+");
+    if ( words.size() < max_words )
+    {
+        words.reserve(min_words);
+        Prefix prefix = walk_back(max_words/2, words);
+        generate_words_unlocked(prefix, min_words, max_words, words);
+    }
     return words;
 }
 
@@ -164,7 +169,6 @@ void TextGenerator::generate_words_unlocked(
         prefix.shift(words.back());
     }
 }
-
 
 TextGenerator::Prefix TextGenerator::walk_back(
     std::size_t max_words,
