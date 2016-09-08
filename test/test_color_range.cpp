@@ -188,4 +188,21 @@ BOOST_AUTO_TEST_CASE( test_hsv )
     range.resize(1);
     it = range.begin();
     BOOST_CHECK((*it).vec() == c1.vec());
+
+    range.color(-1);
+    range.color(2);
+}
+
+BOOST_AUTO_TEST_CASE( test_color )
+{
+    Color a{0, 0, 0};
+    Color b{255, 255, 255};
+    ColorRange range(a, b, 5);
+    BOOST_CHECK(range.color(-1) == a);
+    BOOST_CHECK(range.color(0) == a);
+    BOOST_CHECK(range.color(0.25) == a.blend(b, 0.25));
+    BOOST_CHECK(range.color(0.50) == a.blend(b, 0.50));
+    BOOST_CHECK(range.color(0.75) == a.blend(b, 0.75));
+    BOOST_CHECK(range.color(1) == b);
+    BOOST_CHECK(range.color(2) == b);
 }

@@ -202,7 +202,8 @@ private:
 
     constexpr value_type color() const
     {
-        return range->color(double(offset) / (size(*range) - 1));
+        float pos = size(*range) < 2 ? 0 : float(offset) / (size(*range) - 1);
+        return range->color(pos);
     }
 
     const Range* range;

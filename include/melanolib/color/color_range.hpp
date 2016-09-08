@@ -68,7 +68,7 @@ public:
     constexpr value_type color(float factor) const
     {
         using namespace repr;
-        if ( size() < 2 || factor < 0 )
+        if ( factor < 0 )
             return first;
         if ( factor > 1 )
             return second;
