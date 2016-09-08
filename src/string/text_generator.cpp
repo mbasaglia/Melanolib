@@ -29,7 +29,7 @@ namespace string {
 void TextGenerator::add_text(std::istream& stream)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    Prefix prefix(prefix_size);
+    Prefix prefix;
     std::string word;
     Chain::iterator last = chain.end();
     while ( stream.good() )
@@ -42,7 +42,7 @@ void TextGenerator::add_text(std::istream& stream)
             // On newline, mark the last item as a good ending point
             if ( ch == '\n' )
             {
-                prefix = Prefix(prefix_size);
+                prefix = Prefix();
                 if ( last != chain.end() )
                     last->second.end = true;
             }
@@ -76,7 +76,7 @@ std::vector<std::string> TextGenerator::generate_words(
     std::lock_guard<std::mutex> lock(mutex);
     std::vector<std::string> words;
     words.reserve(min_words);
-    generate_words_unlocked(Prefix(prefix_size), min_words, max_words, words);
+    generate_words_unlocked(Prefix(), min_words, max_words, words);
     return words;
 }
 
@@ -172,25 +172,22 @@ TextGenerator::Prefix TextGenerator::walk_back(
 {
     // Nothing to do
     if ( words.empty() )
-        return Prefix(prefix_size);
+        return Prefix();
 
     // Keep going back until we hit the word limit
     while ( words.size() < max_words )
     {
         std::vector<Chain::const_iterator> prefixes;
 
-        // single_word is for when we are only supposed to check one word in lookback
-        bool single_word = words.size() == 1 || prefix_size == 1;
-
         // Search through the map for matching transitions
         for ( auto iter = chain.begin(); iter != chain.end(); ++iter )
         {
-            if ( single_word )
+            if ( words.size() == 1 )
             {
                 if ( icase_equal(iter->second.text, words.front()) )
                     prefixes.push_back(iter);
             }
-            else if ( icase_equal(iter->first.back(), words[0]) &&
+            else if ( icase_equal(iter->first.second, words[0]) &&
                         icase_equal(iter->second.text, words[1]) )
             {
                 prefixes.push_back(iter);
@@ -207,30 +204,26 @@ TextGenerator::Prefix TextGenerator::walk_back(
         if ( random_iter->second.end && words.size() > 1 )
         {
             words.erase(words.begin());
-            if ( !single_word )
+            if ( words.size() > 1 )
                 words.erase(words.begin());
             break;
         }
 
-        auto& random_prefix = random_iter->first;
-        auto prefix_end = random_prefix.end();
-        if ( !single_word && random_prefix.begin() != prefix_end  )
-            prefix_end--;
-        // Skip empties
-        auto prefix_begin = std::find_if(random_prefix.begin(), random_prefix.end(),
-            [](const std::string& str) { return !str.empty(); });
         // Append the prefix
-        words.insert(words.begin(), prefix_begin, prefix_end);
+        if ( words.size() == 1 )
+            words.insert(words.begin(), random_iter->first.second);
 
         // Starting prefix, can exit
-        if ( random_prefix.front().empty() )
+        if ( random_iter->first.first.empty() )
             break;
+        else
+            words.insert(words.begin(), random_iter->first.first);
     }
     // Determine the prefix obtained from the end of words
-    Prefix last_prefix(prefix_size);
-    std::size_t copy_size = math::min(prefix_size, words.size());
-    for ( std::size_t i = 0; i < copy_size; i++ )
-        last_prefix[prefix_size - copy_size + i] = words[words.size() - copy_size + i];
+    Prefix last_prefix;
+    if ( words.size() > 1 )
+        last_prefix.shift(words[words.size() - 2]);
+    last_prefix.shift(words.back());
     return last_prefix;
 }
 

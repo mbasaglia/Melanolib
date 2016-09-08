@@ -41,31 +41,32 @@ namespace string {
  */
 class TextGenerator
 {
-    struct Prefix : public std::deque<std::string>
+    struct Prefix
     {
         Prefix(){}
-        explicit Prefix(std::size_t size) : std::deque<std::string>(size) {}
 
         void shift(const std::string& word)
         {
-            pop_front();
-            push_back(word);
+            first = std::move(second);
+            second = word;
         }
 
         bool operator==(const Prefix& p) const
         {
-            return size() == p.size() && std::equal(begin(), end(), p.begin(), p.end(), icase_equal);
+            return icase_equal(first, p.first) && icase_equal(second, p.second);
         }
+
+        std::string first;
+        std::string second;
     };
 
     struct PrefixHasher
     {
-        size_t operator()(const Prefix& queue) const
+        size_t operator()(const Prefix& prefix) const
         {
-            std::size_t hash = 0;
-            std::hash<Prefix::value_type> hasher;
-            for ( const auto& item : queue )
-                hash ^= hasher(strtolower(item)) + 0x9e3779b9 + (hash<<6) + (hash>>2);
+            std::hash<std::string> hasher;
+            std::size_t hash = hasher(strtolower(prefix.first));
+            hash ^= hasher(strtolower(prefix.second)) + 0x9e3779b9 + (hash<<6) + (hash>>2);
             return hash;
         }
     };
@@ -84,14 +85,12 @@ public:
 
     /**
      * \brief Creates a TextGenerator
-     * \param prefix_size   Size of lookback prefixes
      * \param max_size      Maximum number of transition in the Markov chain
      * \param max_age       Transition age cutoff
      */
-    explicit TextGenerator(std::size_t prefix_size = 2,
-                           std::size_t max_size = 65535,
+    explicit TextGenerator(std::size_t max_size = 65535,
                            time::days max_age = time::days(30))
-        : prefix_size(prefix_size), max_size(max_size), max_age(max_age)
+        : max_size(max_size), max_age(max_age)
     {}
 
     /**
@@ -193,7 +192,6 @@ private:
     Prefix walk_back(std::size_t max_words, std::vector<std::string>& words) const;
 
     Chain chain;
-    std::size_t prefix_size;
     std::size_t max_size;
     time::days max_age;
     Clock::time_point last_cleanup = Clock::time_point::min();
