@@ -159,7 +159,7 @@ template<class Return=int, class Argument=double>
  * \brief (Stable) maximum between two values
  */
 template<class T, class U>
-    inline constexpr T max(T&& a, U&& b)
+    inline constexpr T max(T a, U b)
     {
         return a < b ? b : a;
     }
@@ -177,7 +177,7 @@ template<class T, class...Ts>
  * \brief (Stable) minimum between two values
  */
 template<class T, class U>
-    inline constexpr T min(T&& a, U&& b)
+    inline constexpr T min(T a, U b)
     {
         return !(b < a) ? a : b;
     }
