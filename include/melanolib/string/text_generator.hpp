@@ -21,17 +21,17 @@
 #ifndef MELANOLIB_STRING_TEXT_GENERATOR_HPP
 #define MELANOLIB_STRING_TEXT_GENERATOR_HPP
 
-#include <deque>
-#include <vector>
-#include <string>
 #include <sstream>
 #include <unordered_map>
+#include <iterator>
+#include <vector>
+#include <algorithm>
 #include <mutex>
 
 #include "melanolib/math/random.hpp"
 #include "melanolib/string/simple_stringutils.hpp"
 #include "melanolib/time/units.hpp"
-#include "melanolib/data_structures/hash.hpp"
+#include "melanolib/data_structures/icase_functors.hpp"
 
 namespace melanolib {
 namespace string {
@@ -41,43 +41,15 @@ namespace string {
  */
 class TextGenerator
 {
-    struct Prefix
-    {
-        Prefix(){}
-
-        void shift(const std::string& word)
-        {
-            first = std::move(second);
-            second = word;
-        }
-
-        bool operator==(const Prefix& p) const
-        {
-            return icase_equal(first, p.first) && icase_equal(second, p.second);
-        }
-
-        std::string first;
-        std::string second;
-    };
-
-    struct PrefixHasher
-    {
-        std::size_t operator()(const Prefix& prefix) const
-        {
-            return multi_hash(prefix.first, prefix.second);
-        }
-    };
-
     using Clock = std::chrono::steady_clock;
-
-    struct Suffix
+    struct Node;
+    struct NodeIterator;
+    enum class Direction
     {
-        std::string text;
-        bool end;
-        Clock::time_point creation;
+        Forward,
+        Backward
     };
 
-    using Chain = std::unordered_multimap<Prefix, Suffix, PrefixHasher>;
 public:
 
     /**
@@ -86,13 +58,12 @@ public:
      * \param max_age       Transition age cutoff
      */
     explicit TextGenerator(std::size_t max_size = 65535,
-                           time::days max_age = time::days(30))
-        : max_size(max_size), max_age(max_age)
-    {}
+                           time::days max_age = time::days(30));
+    ~TextGenerator();
 
     /**
-     * \brief Parses the contents of \p stream and adds the required state to
-     *        the model graph.
+     * \brief Parses the contents of \p stream and adds the required states to
+     *        the graph.
      */
     void add_text(std::istream& stream);
 
@@ -107,38 +78,53 @@ public:
     }
 
     /**
-     * \brief Generates between \p min_words and \p max_words random words
+     * \brief Attempts to generate between \p min_words and \p max_words words
+     *
+     * Depending on the available data, it might end up with fewer words.
+     * \p max_words is a hard upper limit.
      */
-    std::vector<std::string> generate_words(std::size_t min_words,
-                                            std::size_t max_words) const;
+    std::vector<std::string> generate_words(
+        std::size_t min_words,
+        std::size_t max_words) const;
 
     /**
-     * \brief Generates between \p min_words and \p max_words random words,
-     *        one of which must be \p prompt
-     * \note if \p prompt is not in the model, the result might contain less
-     *       than \p min_words words
+     * \brief Attempts to generate between \p min_words and \p max_words words
+     *
+     * The generated phrase always contains \p prompt.
+     *
+     * Depending on the available data, it might end up with fewer words.
+     * \p max_words is a hard upper limit.
      */
-    std::vector<std::string> generate_words(const std::string& prompt,
-                                            std::size_t min_words,
-                                            std::size_t max_words) const;
+    std::vector<std::string> generate_words(
+        const std::string& prompt,
+        std::size_t min_words,
+        std::size_t max_words) const;
 
     /**
-     * \brief Generates between \p min_words and \p max_words random words
+     * \brief Attempts to generate between \p min_words and \p max_words words
+     *
+     * Depending on the available data, it might end up with fewer words.
+     * \p max_words is a hard upper limit.
      */
-    std::string generate_string(std::size_t min_words, std::size_t max_words) const
+    std::string generate_string(
+        std::size_t min_words,
+        std::size_t max_words) const
     {
         return implode(" ", generate_words(min_words, max_words));
     }
 
     /**
-     * \brief Generates between \p min_words and \p max_words random words,
-     *        one of which must be \p prompt
-     * \note if \p prompt is not in the model, the result might contain less
-     *       than \p min_words words
+     * \brief Attempts to generate between \p min_words and \p max_words words
+     *
+     * The generated phrase always contains \p prompt.
+     *
+     * Depending on the available data, it might end up with fewer words.
+     * \p max_words is a hard upper limit.
      */
-    std::string generate_string(const std::string& prompt,
-                                std::size_t min_words,
-                                std::size_t max_words) const
+    std::string generate_string(
+        const std::string& prompt,
+        std::size_t min_words,
+        std::size_t max_words) const
     {
         return implode(" ", generate_words(prompt, min_words, max_words));
     }
@@ -153,42 +139,36 @@ public:
     void set_max_age(time::days days);
 
 private:
+    void expand(
+        Direction direction,
+        std::vector<std::string>& words,
+        std::size_t min_words,
+        std::size_t enough_words,
+        std::size_t cutoff
+    ) const;
 
-    /**
-     * \brief Uses \p prefix to generate words into \p words
-     */
-    void generate_words_unlocked(Prefix prefix,
-                                 std::size_t min_words,
-                                 std::size_t max_words,
-                                 std::vector<std::string>& words) const;
+    void generate(
+        NodeIterator iterator,
+        std::vector<std::string>& words,
+        std::size_t min_words,
+        std::size_t enough_words,
+        std::size_t cutoff
+    ) const;
 
-    /**
-     * \brief Selects an iterator matching \p prefix
-     */
-    Chain::const_iterator random_suffix(const Prefix& prefix) const
-    {
-        auto choices = chain.equal_range(prefix);
+    Node* node_for_nocreate(const std::string& word) const;
 
-        if ( choices.first == choices.second )
-            return chain.end();
+    Node* node_for(const std::string& word);
 
-        auto count = std::distance(choices.first, choices.second);
-        std::advance(choices.first, math::random(count-1));
-        return choices.first;
-    }
+    void mark_start(Node* node);
 
     /**
      * \see cleanup()
      */
     void cleanup_unlocked();
 
-    /**
-     * \brief Looks at the beginning of \p words and tracks back until
-     *        \p max_words or a delimiter is found
-     */
-    Prefix walk_back(std::size_t max_words, std::vector<std::string>& words) const;
-
-    Chain chain;
+    std::vector<Node*> start;
+    /// \todo icase stuff
+    std::unordered_map<std::string, std::unique_ptr<Node>, ICaseHasher, ICaseComparator> words;
     std::size_t max_size;
     time::days max_age;
     Clock::time_point last_cleanup = Clock::time_point::min();

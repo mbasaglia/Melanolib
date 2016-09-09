@@ -28,13 +28,162 @@
 namespace melanolib {
 namespace string {
 
+struct TextGenerator::Node
+{
+    using Adjacency = std::unordered_multimap<Node*, Node*>;
+    using Iterator = Adjacency::const_iterator;
+    enum class ExitPolicy
+    {
+        ShouldNotExit,
+        MayExit,
+        ShouldExit,
+    };
+
+    explicit Node(std::string word)
+        : word(std::move(word))
+    {
+        bump();
+    }
+
+    void bump()
+    {
+        last_updated = Clock::now();
+    }
+
+    void connect(Node* before, Node* after)
+    {
+        forward.insert({before, after});
+        backward.insert({after, before});
+    }
+
+    Node* walk(Direction direction, Node* from, ExitPolicy policy) const
+    {
+        auto map = direction == Direction::Forward ? &forward : &backward;
+        auto range = map->equal_range(from);
+        return choose(range.first, range.second, policy);
+    }
+
+    Node* walk_nocontext(Direction direction, ExitPolicy policy) const
+    {
+        auto map = direction == Direction::Forward ? &forward : &backward;
+        return choose(map->begin(), map->end(), policy);
+    }
+
+    void drop(Node* node)
+    {
+        drop_on(forward, node);
+        drop_on(backward, node);
+    }
+
+    void drop_on(Adjacency& map, Node* node)
+    {
+        map.erase(node);
+        for ( auto iter = map.begin(); iter != map.end(); )
+        {
+            if ( iter->second == node )
+                iter = map.erase(iter);
+            else
+                ++iter;
+        }
+    }
+
+    Node* choose(Iterator begin, Iterator end, ExitPolicy policy) const
+    {
+        if ( begin == end )
+            return nullptr;
+
+        std::size_t size = std::distance(begin, end);
+        auto iter = begin;
+        auto pos = math::random(size-1);
+        std::advance(iter, pos);
+        if ( policy != ExitPolicy::MayExit )
+        {
+            for ( std::size_t i = 1; i < size && !acceptable(iter->second, policy); i++ )
+            {
+                iter++;
+                if ( i + pos == size )
+                    iter = begin;
+            }
+        }
+        return iter->second;
+    }
+
+    bool acceptable(Node* node, ExitPolicy policy) const
+    {
+        if ( policy == ExitPolicy::ShouldExit )
+            return node == nullptr;
+        if ( policy == ExitPolicy::ShouldNotExit )
+            return node != nullptr;
+        return true;
+    }
+
+    static ExitPolicy policy_from_size(std::size_t size, std::size_t min, std::size_t max)
+    {
+        if ( size < min )
+            return ExitPolicy::ShouldNotExit;
+        if ( size > max )
+            return ExitPolicy::ShouldExit;
+        return ExitPolicy::MayExit;
+    }
+
+    std::string word;
+    Adjacency forward;
+    Adjacency backward;
+    Clock::time_point last_updated;
+};
+
+
+struct TextGenerator::NodeIterator
+{
+    NodeIterator(Direction direction, Node* node = nullptr, Node* context = nullptr)
+        : direction(direction), context(context), node(node)
+    {}
+
+    void advance(Node::ExitPolicy exit_policy)
+    {
+        context = node->walk(direction, context, exit_policy);
+        std::swap(context, node);
+    }
+
+    void advance_nocontext(Node::ExitPolicy exit_policy)
+    {
+        context = node->walk_nocontext(direction, exit_policy);
+        std::swap(context, node);
+    }
+
+    explicit operator bool() const
+    {
+        return node;
+    }
+
+    const std::string& operator*() const
+    {
+        return node->word;
+    }
+
+    Direction direction;
+    Node* context;
+    Node* node;
+};
+
+TextGenerator::TextGenerator(std::size_t max_size, time::days max_age)
+    : max_size(max_size), max_age(max_age)
+{}
+
+TextGenerator::~TextGenerator()
+{}
 
 void TextGenerator::add_text(std::istream& stream)
 {
+    static const uint8_t is_begin = 1;
+    static const uint8_t is_end = 2;
+
     std::lock_guard<std::mutex> lock(mutex);
-    Prefix prefix;
+
     std::string word;
-    Chain::iterator last = chain.end();
+    std::deque<std::pair<Node*, uint8_t>> context;
+
+    bool at_bounday = true;
     while ( stream.good() )
     {
         // skip whitespaces
@@ -45,31 +194,56 @@ void TextGenerator::add_text(std::istream& stream)
             // On newline, mark the last item as a good ending point
             if ( ch == '\n' )
             {
-                prefix = Prefix();
-                if ( last != chain.end() )
-                    last->second.end = true;
+                if ( !context.empty() )
+                    context.back().second |= is_end;
+                at_bounday = true;
             }
         }
         if ( !stream.good() )
             break;
         stream.unget();
 
-        // Read a word from the stream and add it to the chain
-        if ( stream >> word )
-        {
-            // If the current word ends with a period, is a good ending point
-            bool end = word.back() == '.' || stream.eof();
-            last = chain.insert({prefix, {word, end, Clock::now()}});
-            prefix.shift(word);
+        if ( !(stream >> word) )
+            break;
 
-            // Ensure we don't exceed the maximum size
-            if ( chain.size() > max_size )
-                cleanup_unlocked();
+        Node* node = node_for(word);
+        uint8_t flags = 0;
+        if ( at_bounday )
+        {
+            mark_start(node);
+            flags |= is_begin;
+        }
+        // If the current word ends with a period, is a good ending point
+        at_bounday = word.back() == '.' || stream.eof();
+        if ( at_bounday )
+            flags |= is_end;
+
+        // Add the current word to the end of the context queue
+        if ( context.size() == 3 )
+            context.pop_front();
+        context.push_back({node, flags});
+
+        // Link all the transitions relative to the central node
+        if ( context.size() == 3 )
+        {
+            context[1].first->connect(context[0].first, context[2].first);
+
+            if ( context[1].second & is_begin )
+                context[1].first->connect(nullptr, context[2].first);
+
+            if ( context[1].second & is_end )
+                context[1].first->connect(context[0].first, nullptr);
+        }
+        // This only happens once at the start, we know the first node is a starting node
+        else if ( context.size() == 2 )
+        {
+            context[0].first->connect(nullptr, context[1].first);
         }
     }
 
-    if ( last != chain.end() )
-        last->second.end = true;
+    // We need to handle the last ending node
+    if ( context.size() >= 2 )
+        context.back().first->connect(context[context.size()-2].first, nullptr);
 }
 
 std::vector<std::string> TextGenerator::generate_words(
@@ -77,9 +251,16 @@ std::vector<std::string> TextGenerator::generate_words(
     std::size_t max_words) const
 {
     std::lock_guard<std::mutex> lock(mutex);
+    if ( start.empty() )
+        return {};
+
     std::vector<std::string> words;
-    words.reserve(min_words);
-    generate_words_unlocked(Prefix(), min_words, max_words, words);
+    words.reserve(max_words);
+    NodeIterator iterator(
+        Direction::Forward,
+        start[math::random(start.size()-1)]
+    );
+    generate(iterator, words, min_words, min_words, max_words);
     return words;
 }
 
@@ -88,14 +269,18 @@ std::vector<std::string> TextGenerator::generate_words(
     std::size_t min_words,
     std::size_t max_words) const
 {
-    std::lock_guard<std::mutex> lock(mutex);
     std::vector<std::string> words = regex_split(prompt, "\\s+");
-    if ( words.size() < max_words )
-    {
-        words.reserve(min_words);
-        Prefix prefix = walk_back(max_words/2, words);
-        generate_words_unlocked(prefix, min_words, max_words, words);
-    }
+
+    if ( words.empty() )
+        return generate_words(min_words, max_words);
+
+    std::lock_guard<std::mutex> lock(mutex);
+    if ( start.empty() || words.size() >= max_words )
+        return words;
+
+    words.reserve(max_words);
+    expand(Direction::Backward, words, 0, min_words, max_words);
+    expand(Direction::Forward, words, min_words, min_words, max_words);
     return words;
 }
 
@@ -107,39 +292,56 @@ void TextGenerator::cleanup()
 
 void TextGenerator::cleanup_unlocked()
 {
-    auto now = Clock::now();
-    auto death = Clock::now() - max_age;
+    auto previous_cleanup = last_cleanup;
+    last_cleanup = Clock::now();
+    auto death = last_cleanup - max_age;
+
+    std::vector<Node*> deleted;
 
     // If the last cleanup was recent, there's no point in trying to erase
-    // old transitions as they would already been removed
-    if ( last_cleanup < death )
+    // old nodes as they would already been removed
+    if ( previous_cleanup < death )
     {
-        // Remove all entries that are too old
-        for ( Chain::iterator iter = chain.begin(); iter != chain.end(); )
+        // Remove all nodes that are too old
+        for ( auto iter = words.begin(); iter != words.end(); )
         {
-            if ( iter->second.creation < death )
-                iter = chain.erase(iter);
+            if ( iter->second->last_updated < death )
+            {
+                deleted.push_back(iter->second.get());
+                iter = words.erase(iter);
+            }
             else
+            {
                 ++iter;
+            }
         }
     }
 
-    // Remove random transitions until we get to the maximum allowed size
-    while ( chain.size() > max_size )
+    // Remove random nodes until we get to the maximum allowed size
+    while ( words.size() > max_size )
     {
-        Chain::iterator iter = chain.begin();
-        std::advance(iter, math::random(chain.size() - 1));
-        chain.erase(iter);
+        auto iter = words.begin();
+        std::advance(iter, math::random(words.size() - 1));
+        deleted.push_back(iter->second.get());
+        words.erase(iter);
     }
 
-    last_cleanup = now;
+    // Remove references to deleted nodes
+    for ( auto& node : words )
+        for ( auto old : deleted )
+            node.second->drop(old);
+    std::sort(deleted.begin(), deleted.end());
+    auto delete_if = [&deleted](Node* node) {
+        return std::binary_search(deleted.begin(), deleted.end(), node);
+    };
+    start.erase(std::remove_if(start.begin(), start.end(), delete_if), start.end());
 }
 
 void TextGenerator::set_max_size(std::size_t entries)
 {
     std::lock_guard<std::mutex> lock(mutex);
     max_size = entries;
-    if ( chain.size() > entries )
+    if ( words.size() > entries )
         cleanup_unlocked();
 }
 
@@ -149,86 +351,80 @@ void TextGenerator::set_max_age(time::days days)
     max_age = days;
 }
 
-void TextGenerator::generate_words_unlocked(
-    Prefix prefix,
+void TextGenerator::expand(
+    Direction direction,
+    std::vector<std::string>& words,
     std::size_t min_words,
-    std::size_t max_words,
-    std::vector<std::string>& words) const
+    std::size_t enough_words,
+    std::size_t cutoff) const
 {
-    while ( words.size() < max_words )
+    if ( words.size() >= cutoff )
+        return;
+
+    if ( direction == Direction::Backward )
+        std::reverse(words.begin(), words.end());
+
+    NodeIterator iterator(
+        direction,
+        node_for_nocreate(words.back()),
+        words.size() > 1 ? node_for_nocreate(words[words.size() - 2]) : nullptr
+    );
+
+    if ( iterator )
     {
-        // Select a random suffix for the current prefix
-        auto iter = random_suffix(prefix);
-        // If we can't continue, terminate here
-        if ( iter == chain.end() )
-            break;
-        words.push_back(iter->second.text);
-        // If we have enough words and we can end, we terminate
-        if ( words.size() >= min_words && iter->second.end )
-            break;
-        prefix.shift(words.back());
+        auto policy = Node::policy_from_size(words.size(), min_words, enough_words);
+        if ( iterator.context )
+            iterator.advance(policy);
+        else
+            iterator.advance_nocontext(policy);
+
+        generate(iterator, words, min_words, enough_words, cutoff);
+    }
+
+    if ( direction == Direction::Backward )
+        std::reverse(words.begin(), words.end());
+}
+
+void TextGenerator::generate(
+    NodeIterator iterator,
+    std::vector<std::string>& words,
+    std::size_t min_words,
+    std::size_t enough_words,
+    std::size_t cutoff) const
+{
+    while ( iterator && words.size() < cutoff )
+    {
+        words.push_back(*iterator);
+        iterator.advance(Node::policy_from_size(words.size(), min_words, enough_words));
     }
 }
 
-TextGenerator::Prefix TextGenerator::walk_back(
-    std::size_t max_words,
-    std::vector<std::string>& words) const
+TextGenerator::Node* TextGenerator::node_for_nocreate(const std::string& word) const
 {
-    // Nothing to do
-    if ( words.empty() )
-        return Prefix();
+    auto iter = words.find(word);
+    if ( iter == words.end() )
+        return nullptr;
+    return iter->second.get();
+}
 
-    // Keep going back until we hit the word limit
-    while ( words.size() < max_words )
-    {
-        std::vector<Chain::const_iterator> prefixes;
+TextGenerator::Node* TextGenerator::node_for(const std::string& word)
+{
+    auto& node = words[word];
 
-        // Search through the map for matching transitions
-        for ( auto iter = chain.begin(); iter != chain.end(); ++iter )
-        {
-            if ( words.size() == 1 )
-            {
-                if ( icase_equal(iter->second.text, words.front()) )
-                    prefixes.push_back(iter);
-            }
-            else if ( icase_equal(iter->first.second, words[0]) &&
-                        icase_equal(iter->second.text, words[1]) )
-            {
-                prefixes.push_back(iter);
-            }
-        }
-        // No match, bail out
-        if ( prefixes.empty() )
-            break;
+    if ( !node )
+        node = New<Node>(word);
+    else
+        node->bump();
 
-        // Select a random match
-        auto random_iter = prefixes[math::random(prefixes.size() - 1)];
+    if ( words.size() > max_size )
+        cleanup_unlocked();
 
-        // If it looks like an ending point, exit
-        if ( random_iter->second.end && words.size() > 1 )
-        {
-            words.erase(words.begin());
-            if ( words.size() > 1 )
-                words.erase(words.begin());
-            break;
-        }
+    return node.get();
+}
 
-        // Append the prefix
-        if ( words.size() == 1 )
-            words.insert(words.begin(), random_iter->first.second);
-
-        // Starting prefix, can exit
-        if ( random_iter->first.first.empty() )
-            break;
-        else
-            words.insert(words.begin(), random_iter->first.first);
-    }
-    // Determine the prefix obtained from the end of words
-    Prefix last_prefix;
-    if ( words.size() > 1 )
-        last_prefix.shift(words[words.size() - 2]);
-    last_prefix.shift(words.back());
-    return last_prefix;
+void TextGenerator::mark_start(Node* node)
+{
+    start.push_back(node);
 }
 
 } // namespace string
