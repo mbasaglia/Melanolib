@@ -167,7 +167,7 @@ struct TextGenerator::NodeIterator
 };
 
 TextGenerator::TextGenerator(std::size_t max_size, time::days max_age)
-    : max_size(max_size), max_age(max_age)
+    : _max_size(max_size), _max_age(max_age)
 {}
 
 TextGenerator::~TextGenerator()
@@ -294,7 +294,7 @@ void TextGenerator::cleanup_unlocked()
 {
     auto previous_cleanup = last_cleanup;
     last_cleanup = Clock::now();
-    auto death = last_cleanup - max_age;
+    auto death = last_cleanup - _max_age;
 
     std::vector<Node*> deleted;
 
@@ -318,7 +318,7 @@ void TextGenerator::cleanup_unlocked()
     }
 
     // Remove random nodes until we get to the maximum allowed size
-    while ( words.size() > max_size )
+    while ( words.size() > _max_size )
     {
         auto iter = words.begin();
         std::advance(iter, math::random(words.size() - 1));
@@ -340,7 +340,7 @@ void TextGenerator::cleanup_unlocked()
 void TextGenerator::set_max_size(std::size_t entries)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    max_size = entries;
+    _max_size = entries;
     if ( words.size() > entries )
         cleanup_unlocked();
 }
@@ -348,7 +348,7 @@ void TextGenerator::set_max_size(std::size_t entries)
 void TextGenerator::set_max_age(time::days days)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    max_age = days;
+    _max_age = days;
 }
 
 void TextGenerator::expand(
@@ -416,7 +416,7 @@ TextGenerator::Node* TextGenerator::node_for(const std::string& word)
     else
         node->bump();
 
-    if ( words.size() > max_size )
+    if ( words.size() > _max_size )
         cleanup_unlocked();
 
     return node.get();

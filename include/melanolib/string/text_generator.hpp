@@ -138,6 +138,16 @@ public:
 
     void set_max_age(time::days days);
 
+    std::size_t max_size() const
+    {
+        return _max_size;
+    }
+
+    time::days max_age() const
+    {
+        return _max_age;
+    }
+
 private:
     void expand(
         Direction direction,
@@ -169,8 +179,8 @@ private:
     std::vector<Node*> start;
     /// \todo icase stuff
     std::unordered_map<std::string, std::unique_ptr<Node>, ICaseHasher, ICaseComparator> words;
-    std::size_t max_size;
-    time::days max_age;
+    std::size_t _max_size;
+    time::days _max_age;
     Clock::time_point last_cleanup = Clock::time_point::min();
     mutable std::mutex mutex;
 };
