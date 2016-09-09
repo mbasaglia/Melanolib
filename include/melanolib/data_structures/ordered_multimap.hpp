@@ -21,23 +21,11 @@
 #ifndef MELANOLIB_DATA_STRUCTURES_ORDERED_MULTIMAP_HPP
 #define MELANOLIB_DATA_STRUCTURES_ORDERED_MULTIMAP_HPP
 
-#include <string>
 #include <vector>
 
-#include "melanolib/string/simple_stringutils.hpp"
+#include "melanolib/data_structures/icase_functors.hpp"
 
 namespace melanolib {
-
-/**
- * \brief Case-insensitive string comparator class
- */
-struct ICaseComparator
-{
-    bool operator()(const std::string& a, const std::string& b) const
-    {
-        return melanolib::string::icase_equal(a, b);
-    }
-};
 
 /**
  * \brief Associative container which allows multiple items with the same
