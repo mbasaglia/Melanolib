@@ -31,6 +31,7 @@
 #include "melanolib/math/random.hpp"
 #include "melanolib/string/simple_stringutils.hpp"
 #include "melanolib/time/units.hpp"
+#include "melanolib/time/date_time.hpp"
 #include "melanolib/data_structures/icase_functors.hpp"
 
 namespace melanolib {
@@ -41,9 +42,10 @@ namespace string {
  */
 class TextGenerator
 {
-    using Clock = std::chrono::steady_clock;
+    using Clock = time::DateTime::Clock;
     struct Node;
     struct NodeIterator;
+    struct GraphFormatter;
     enum class Direction
     {
         Forward,
@@ -51,6 +53,12 @@ class TextGenerator
     };
 
 public:
+    enum class StorageFormat
+    {
+        TextPlain,
+        Binary,
+        Dot
+    };
 
     /**
      * \brief Creates a TextGenerator
@@ -147,6 +155,18 @@ public:
     {
         return _max_age;
     }
+
+    /**
+     * \brief Stores a representation of the internal data structure to a stream
+     * \note This only includes text data, not max_age and the like
+     */
+    void store(std::ostream& output) const;
+
+    /**
+     * \brief Loads a representation of the internal data structure from a stream
+     * \note This only includes text data, not max_age and the like
+     */
+    void load(std::istream& input);
 
 private:
     void expand(

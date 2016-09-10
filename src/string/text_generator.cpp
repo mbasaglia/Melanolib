@@ -24,6 +24,8 @@
 
 #include "melanolib/math/math.hpp"
 #include "melanolib/string/stringutils.hpp"
+#include "melanolib/time/time_string.hpp"
+#include "melanolib/time/time_parser.hpp"
 
 namespace melanolib {
 namespace string {
@@ -425,6 +427,265 @@ TextGenerator::Node* TextGenerator::node_for(const std::string& word)
 void TextGenerator::mark_start(Node* node)
 {
     start.push_back(node);
+}
+
+struct TextGenerator::GraphFormatter
+{
+    using NodeIdMap = std::unordered_map<uintptr_t, Node*>;
+
+    GraphFormatter(std::ostream& output)
+        : stream(output.rdbuf())
+    {}
+
+    GraphFormatter(std::istream& input)
+        : stream(input.rdbuf())
+    {}
+
+    template<class Uint>
+        std::enable_if_t<std::is_unsigned<Uint>::value>
+        write(Uint value)
+    {
+        stream << value;
+    }
+
+    template<class Uint>
+        std::enable_if_t<std::is_unsigned<Uint>::value>
+        read(Uint& value)
+    {
+        if ( !(stream >> value) )
+            error();
+    }
+
+    template<class Container>
+        std::enable_if_t<sizeof(typename Container::value_type)>
+        write(const Container& value)
+    {
+        write(value.size());
+        for ( const auto& item : value )
+        {
+            write_separator(itemsep);
+            write(item);
+        }
+        write_separator(recordsep);
+    }
+
+    template<class ValueType>
+        void read(std::vector<ValueType>& container)
+    {
+        std::size_t size;
+        read(size);
+        container.reserve(size);
+        for ( std::size_t i = 0; i < size; i++ )
+        {
+            read_separator(itemsep);
+            ValueType value;
+            read(value);
+            container.emplace_back(std::move(value));
+        }
+        read_separator(recordsep);
+    }
+
+    void write(Node* node)
+    {
+        write(uintptr_t(node));
+    }
+
+    void read(Node*& node)
+    {
+        uintptr_t node_id = 0;
+        read(node_id);
+        node = (Node*)(node_id);
+    }
+
+
+    void write(const Clock::time_point& time)
+    {
+        write(time::format_char(time::DateTime(time), 'c'));
+    }
+
+    void read(Clock::time_point& time)
+    {
+        std::string iso;
+        read(iso);
+        std::istringstream ss(iso); // this ensures we aren't eating up spaces
+        time = time::TimeParser(ss).parse_time_point().time_point();
+    }
+
+    void write_separator(char c)
+    {
+        stream.put(c);
+    }
+
+    void read_separator(char c)
+    {
+        if ( stream.get() != c )
+            error();
+    }
+
+    void write(const std::string& string)
+    {
+        stream.write(string.data(), string.size());
+    }
+
+    void read(std::string& string)
+    {
+        if ( !(stream >> string) )
+            error();
+    }
+
+    void write(const Node::Adjacency::value_type& item)
+    {
+        write(item.first);
+        write_separator(transsep);
+        write(item.second);
+    }
+
+    void write(const std::unique_ptr<Node>& node)
+    {
+        write(node.get());
+        write_separator(itemsep);
+        write(node->word);
+        write_separator(itemsep);
+        write(node->last_updated);
+        write_separator(recordsep);
+
+        write_separator(attrsep);
+        write(node->forward);
+
+        write_separator(attrsep);
+        write(node->backward);
+
+    }
+
+    void read(Node::Adjacency& adj)
+    {
+        std::size_t size;
+        read(size);
+        for ( std::size_t i = 0; i < size; i++ )
+        {
+            std::remove_const_t<Node::Adjacency::key_type> key;
+            read(key);
+            read_separator(transsep);
+            Node::Adjacency::mapped_type value;
+            read(value);
+            adj.insert({key, value});
+        }
+        read_separator(recordsep);
+    }
+
+    void read(std::unique_ptr<Node>& node)
+    {
+        read(node->last_updated);
+        read_separator(recordsep);
+
+        read_separator(attrsep);
+        read(node->forward);
+
+        read_separator(attrsep);
+        read(node->backward);
+    }
+
+    void write(const TextGenerator& tg)
+    {
+        write(tg.start);
+
+        write(tg.words.size());
+        write_separator(recordsep);
+        for ( const auto& item : tg.words )
+            write(item.second);
+    }
+
+    void read(TextGenerator& tg)
+    {
+        tg.words.clear();
+        tg.start.clear();
+
+        read(tg.start);
+
+        std::size_t size;
+        read(size);
+        read_separator(recordsep);
+
+        NodeIdMap node_ids;
+        for ( std::size_t i = 0; i < size; i++ )
+        {
+            uintptr_t id;
+            read(id);
+            read_separator(itemsep);
+
+            std::string word;
+            read(word);
+            read_separator(itemsep);
+
+            auto& ptr = tg.words[word];
+            if ( ptr )
+                error();
+
+            ptr = New<Node>(word);
+            read(ptr);
+            node_ids[id] = ptr.get();
+        }
+
+        translate(tg.start, node_ids);
+        for ( auto& item : tg.words )
+        {
+            translate(item.second->forward, node_ids);
+            translate(item.second->backward, node_ids);
+        }
+    }
+
+    void translate(std::vector<Node*>& nodes, const NodeIdMap& node_ids)
+    {
+        for ( auto& node : nodes )
+        {
+            node = translate(node, node_ids);
+        }
+    }
+
+    Node* translate(Node* node, const NodeIdMap& node_ids)
+    {
+        if ( !node )
+            return node;
+
+        auto iter = node_ids.find(uintptr_t(node));
+        if ( iter == node_ids.end() )
+            error();
+        return iter->second;
+    }
+
+    void translate(Node::Adjacency& adj_list, const NodeIdMap& node_ids)
+    {
+        Node::Adjacency new_list;
+        for ( const auto& item : adj_list )
+        {
+            new_list.insert({
+                translate(item.first, node_ids),
+                translate(item.second, node_ids)
+            });
+        }
+        adj_list = new_list;
+    }
+
+    void error()
+    {
+        throw std::runtime_error("Invalid format");
+    }
+
+    std::iostream stream;
+    char itemsep = ' ';
+    char recordsep = '\n';
+    char attrsep = '\t';
+    char transsep = '~';
+};
+
+void TextGenerator::store(std::ostream& output) const
+{
+    GraphFormatter(output).write(*this);
+}
+
+void TextGenerator::load(std::istream& input)
+{
+    GraphFormatter(input).read(*this);
 }
 
 } // namespace string
