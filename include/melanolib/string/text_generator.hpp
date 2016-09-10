@@ -46,6 +46,7 @@ class TextGenerator
     struct Node;
     struct NodeIterator;
     struct GraphFormatter;
+    struct GraphDotFormatter;
     enum class Direction
     {
         Forward,
@@ -160,13 +161,13 @@ public:
      * \brief Stores a representation of the internal data structure to a stream
      * \note This only includes text data, not max_age and the like
      */
-    void store(std::ostream& output) const;
+    void store(std::ostream& output, StorageFormat format = StorageFormat::TextPlain) const;
 
     /**
      * \brief Loads a representation of the internal data structure from a stream
      * \note This only includes text data, not max_age and the like
      */
-    void load(std::istream& input);
+    void load(std::istream& input, StorageFormat format = StorageFormat::TextPlain);
 
 private:
     void expand(

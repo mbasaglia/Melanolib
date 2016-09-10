@@ -431,7 +431,8 @@ void TextGenerator::mark_start(Node* node)
 
 struct TextGenerator::GraphFormatter
 {
-    using NodeIdMap = std::unordered_map<uintptr_t, Node*>;
+    using NodeId = uintptr_t;
+    using NodeIdMap = std::unordered_map<NodeId, Node*>;
 
     GraphFormatter(std::ostream& output)
         : stream(output.rdbuf())
@@ -487,12 +488,12 @@ struct TextGenerator::GraphFormatter
 
     void write(Node* node)
     {
-        write(uintptr_t(node));
+        write(NodeId(node));
     }
 
     void read(Node*& node)
     {
-        uintptr_t node_id = 0;
+        NodeId node_id = 0;
         read(node_id);
         node = (Node*)(node_id);
     }
@@ -609,7 +610,7 @@ struct TextGenerator::GraphFormatter
         NodeIdMap node_ids;
         for ( std::size_t i = 0; i < size; i++ )
         {
-            uintptr_t id;
+            NodeId id;
             read(id);
             read_separator(itemsep);
 
@@ -647,7 +648,7 @@ struct TextGenerator::GraphFormatter
         if ( !node )
             return node;
 
-        auto iter = node_ids.find(uintptr_t(node));
+        auto iter = node_ids.find(NodeId(node));
         if ( iter == node_ids.end() )
             error();
         return iter->second;
@@ -666,7 +667,7 @@ struct TextGenerator::GraphFormatter
         adj_list = new_list;
     }
 
-    void error()
+    static void error()
     {
         throw std::runtime_error("Invalid format");
     }
@@ -678,14 +679,90 @@ struct TextGenerator::GraphFormatter
     char transsep = '~';
 };
 
-void TextGenerator::store(std::ostream& output) const
+struct TextGenerator::GraphDotFormatter
 {
-    GraphFormatter(output).write(*this);
+    GraphDotFormatter(std::ostream& output)
+        : stream(output.rdbuf())
+    {}
+
+    GraphDotFormatter(std::istream& input)
+        : stream(input.rdbuf())
+    {}
+
+    void write(Node* node)
+    {
+        if ( !node )
+            stream << "finish";
+        else
+            stream << (uintptr_t(node));
+    }
+
+    void write_label(Node* node)
+    {
+        if ( node )
+            stream << "label=\"" << add_slashes(node->word, "\"\\") << '"';
+    }
+
+    void write(Node* from, const Node::Adjacency::value_type& item)
+    {
+        stream << "\t";
+        write(from);
+        stream << " -> ";
+        write(item.second);
+        stream << "[";
+        if ( item.second == nullptr )
+            stream << "color=\"red\" ";
+        write_label(item.first);
+        stream << "];\n";
+    }
+
+    void write(const std::unique_ptr<Node>& node)
+    {
+        write(node.get());
+        stream << "[";
+        write_label(node.get());
+        stream << "];\n";
+
+        for ( const auto& item: node->forward )
+            write(node.get(), item);
+    }
+
+    void write(const TextGenerator& tg)
+    {
+        stream << "// Best rendered with sfdp -Goverlap=scale -Tsvg\n";
+        stream << "digraph {\n";
+        for ( Node* node : tg.start )
+        {
+            stream << "\tstart -> ";
+            write(node);
+            stream << "[color=\"blue\"];\n";
+        }
+
+        for ( const auto& item : tg.words )
+            write(item.second);
+
+        stream << "}";
+    }
+
+    std::ostream stream;
+};
+
+void TextGenerator::store(std::ostream& output, StorageFormat format) const
+{
+    if ( format == StorageFormat::TextPlain )
+        GraphFormatter(output).write(*this);
+    else if ( format == StorageFormat::Dot )
+        GraphDotFormatter(output).write(*this);
+    else
+        GraphFormatter::error();
 }
 
-void TextGenerator::load(std::istream& input)
+void TextGenerator::load(std::istream& input, StorageFormat format)
 {
-    GraphFormatter(input).read(*this);
+    if ( format == StorageFormat::TextPlain )
+        GraphFormatter(input).read(*this);
+    else
+        GraphFormatter::error();
 }
 
 } // namespace string
