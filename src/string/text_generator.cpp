@@ -172,6 +172,25 @@ TextGenerator::TextGenerator(std::size_t max_size, time::days max_age)
     : _max_size(max_size), _max_age(max_age)
 {}
 
+TextGenerator::TextGenerator(TextGenerator&& oth)
+    : start(std::move(oth.start)),
+      words(std::move(oth.words)),
+      _max_size(oth._max_size),
+      _max_age(oth._max_age),
+      last_cleanup(oth.last_cleanup)
+{}
+
+TextGenerator& TextGenerator::operator=(TextGenerator&& oth)
+{
+    std::swap(start, oth.start);
+    std::swap(words, oth.words);
+    std::swap(_max_size, _max_size);
+    std::swap(_max_age, _max_age);
+    std::swap(last_cleanup, last_cleanup);
+
+    return *this;
+}
+
 TextGenerator::~TextGenerator()
 {}
 

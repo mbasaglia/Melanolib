@@ -68,6 +68,10 @@ public:
      */
     explicit TextGenerator(std::size_t max_size = 65535,
                            time::days max_age = time::days(30));
+    
+    TextGenerator(TextGenerator&& oth);
+    TextGenerator& operator=(TextGenerator&& oth);
+
     ~TextGenerator();
 
     /**
