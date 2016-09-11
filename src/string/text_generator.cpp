@@ -265,6 +265,9 @@ void TextGenerator::add_text(std::istream& stream)
     // We need to handle the last ending node
     if ( context.size() >= 2 )
         context.back().first->connect(context[context.size()-2].first, nullptr);
+    // Handle single words
+    else if ( context.size() == 1 )
+        context.back().first->connect(nullptr, nullptr);
 }
 
 std::vector<std::string> TextGenerator::generate_words(
