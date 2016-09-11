@@ -61,6 +61,13 @@ public:
         Dot
     };
 
+    struct Stats
+    {
+        std::size_t word_count = 0;  ///< Number of known words
+        std::size_t transitions = 0; ///< Word pair to next word transitions
+        std::string most_common;     ///< Most common word
+    };
+
     /**
      * \brief Creates a TextGenerator
      * \param max_size      Maximum number of transition in the Markov chain
@@ -173,6 +180,11 @@ public:
      */
     void load(std::istream& input, StorageFormat format = StorageFormat::TextPlain);
 
+    /**
+     * \brief Returns some stats about the internal graph
+     */
+    Stats stats() const;
+
 private:
     void expand(
         Direction direction,
@@ -202,7 +214,6 @@ private:
     void cleanup_unlocked();
 
     std::vector<Node*> start;
-    /// \todo icase stuff
     std::unordered_map<std::string, std::unique_ptr<Node>, ICaseHasher, ICaseComparator> words;
     std::size_t _max_size;
     time::days _max_age;

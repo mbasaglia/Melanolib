@@ -771,6 +771,7 @@ struct TextGenerator::GraphDotFormatter
 
 void TextGenerator::store(std::ostream& output, StorageFormat format) const
 {
+    std::lock_guard<std::mutex> lock(mutex);
     if ( format == StorageFormat::TextPlain )
         GraphFormatter(output).write(*this);
     else if ( format == StorageFormat::Dot )
@@ -781,10 +782,30 @@ void TextGenerator::store(std::ostream& output, StorageFormat format) const
 
 void TextGenerator::load(std::istream& input, StorageFormat format)
 {
+    std::lock_guard<std::mutex> lock(mutex);
     if ( format == StorageFormat::TextPlain )
         GraphFormatter(input).read(*this);
     else
         GraphFormatter::error();
+}
+
+TextGenerator::Stats TextGenerator::stats() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    Stats stats;
+    stats.word_count = words.size();
+    std::size_t most_count = 0;
+    for ( const auto& p : words )
+    {
+        auto local_transitions = p.second->forward.size();
+        stats.transitions += local_transitions;
+        if ( local_transitions > most_count )
+        {
+            most_count = local_transitions;
+            stats.most_common = p.first;
+        }
+    }
+    return stats;
 }
 
 } // namespace string
