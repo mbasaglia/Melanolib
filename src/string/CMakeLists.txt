@@ -13,4 +13,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-add_melano_lib(melano_stringutils stringutils.cpp language.cpp format.cpp text_generator.cpp)
+add_melano_lib(melano_stringutils stringutils.cpp language.cpp format.cpp text_generator.cpp encoding.cpp)
+
+
+find_package(Iconv QUIET)
+if(Iconv_FOUND)
+    add_definitions(-DHAS_ICONV)
+    target_link_libraries(melano_stringutils ${Iconv_LIBRARY})
+    include_directories (${Iconv_INCLUDE_DIR})
+endif()
