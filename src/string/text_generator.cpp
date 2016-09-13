@@ -41,8 +41,8 @@ struct TextGenerator::Node
         ShouldExit,
     };
 
-    explicit Node(std::string word)
-        : word(std::move(word))
+    explicit Node(NodeId id, std::string word)
+        : word(std::move(word)), id(id)
     {
         bump();
     }
@@ -132,6 +132,7 @@ struct TextGenerator::Node
     Adjacency forward;
     Adjacency backward;
     Clock::time_point last_updated;
+    NodeId id;
 };
 
 
@@ -436,7 +437,7 @@ TextGenerator::Node* TextGenerator::node_for(const std::string& word)
     auto& node = words[word];
 
     if ( !node )
-        node = New<Node>(word);
+        node = New<Node>(id_pool.get_id(), word);
     else
         node->bump();
 
@@ -453,7 +454,6 @@ void TextGenerator::mark_start(Node* node)
 
 struct TextGenerator::GraphFormatter
 {
-    using NodeId = uintptr_t;
     using NodeIdMap = std::unordered_map<NodeId, Node*>;
 
     GraphFormatter(std::ostream& output)
@@ -510,7 +510,7 @@ struct TextGenerator::GraphFormatter
 
     void write(Node* node)
     {
-        write(NodeId(node));
+        write(node ? node->id : 0);
     }
 
     void read(Node*& node)
@@ -644,7 +644,7 @@ struct TextGenerator::GraphFormatter
             if ( ptr )
                 error();
 
-            ptr = New<Node>(word);
+            ptr = New<Node>(id, word);
             read(ptr);
             node_ids[id] = ptr.get();
         }
@@ -716,7 +716,7 @@ struct TextGenerator::GraphDotFormatter
         if ( !node )
             stream << "finish";
         else
-            stream << (uintptr_t(node));
+            stream << (node ? node->id : 0);
     }
 
     void write_label(Node* node)

@@ -33,6 +33,7 @@
 #include "melanolib/time/units.hpp"
 #include "melanolib/time/date_time.hpp"
 #include "melanolib/data_structures/icase_functors.hpp"
+#include "melanolib/data_structures/id_pool.hpp"
 
 namespace melanolib {
 namespace string {
@@ -44,6 +45,7 @@ class TextGenerator
 {
     using Clock = time::DateTime::Clock;
     struct Node;
+    using NodeId = std::uintptr_t;
     struct NodeIterator;
     struct GraphFormatter;
     struct GraphDotFormatter;
@@ -218,6 +220,7 @@ private:
     std::size_t _max_size;
     time::days _max_age;
     Clock::time_point last_cleanup = Clock::time_point::min();
+    BasicIdPool<NodeId> id_pool;
     mutable std::mutex mutex;
 };
 
