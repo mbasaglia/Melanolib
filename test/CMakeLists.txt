@@ -48,6 +48,7 @@ if (BUILD_TESTING)
     test_target(test_trie)
     test_target(test_type_utils)
     test_target(test_vector)
+    test_target(test_id_pool)
 
 else()
     message(STATUS "Test targets disabled")
