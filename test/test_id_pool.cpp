@@ -117,3 +117,23 @@ BOOST_AUTO_TEST_CASE( test_mark_scatter )
     BOOST_CHECK_EQUAL(pool.get_id(), 9);
 }
 
+BOOST_AUTO_TEST_CASE( test_mark_out_of_bound )
+{
+    IdPool pool;
+    pool.mark_id(0);
+    pool.mark_id(11);
+    BOOST_CHECK_EQUAL(pool.get_id(), 1);
+    BOOST_CHECK_EQUAL(pool.get_id(), 2);
+    BOOST_CHECK_EQUAL(pool.get_id(), 3);
+    BOOST_CHECK_EQUAL(pool.get_id(), 4);
+    BOOST_CHECK_EQUAL(pool.get_id(), 5);
+    BOOST_CHECK_EQUAL(pool.get_id(), 6);
+    BOOST_CHECK_EQUAL(pool.get_id(), 7);
+    BOOST_CHECK_EQUAL(pool.get_id(), 8);
+    BOOST_CHECK_EQUAL(pool.get_id(), 9);
+    BOOST_CHECK_EQUAL(pool.get_id(), 10);
+    BOOST_CHECK_EQUAL(pool.get_id(), 0);
+    BOOST_CHECK_EQUAL(pool.get_id(), 0);
+    BOOST_CHECK_EQUAL(pool.get_id(), 0);
+}
+
