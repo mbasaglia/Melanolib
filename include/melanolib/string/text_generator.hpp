@@ -47,8 +47,8 @@ class TextGenerator
     struct Node;
     using NodeId = std::uintptr_t;
     struct NodeIterator;
-    struct GraphFormatter;
-    struct GraphDotFormatter;
+    template<class TGen>
+        friend class GraphFormatter;
     enum class Direction
     {
         Forward,
@@ -186,6 +186,14 @@ public:
      * \brief Returns some stats about the internal graph
      */
     Stats stats() const;
+
+    /**
+     * \brief whether the generator limits the number of known words
+     */
+    bool limit_size() const
+    {
+        return _max_size != std::numeric_limits<std::size_t>::max();
+    }
 
 protected:
     /**

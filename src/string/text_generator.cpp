@@ -333,6 +333,10 @@ void TextGenerator::cleanup()
 
 void TextGenerator::cleanup_unlocked()
 {
+    // No reasonable size limit
+    if ( !limit_size() )
+        return;
+
     auto previous_cleanup = last_cleanup;
     last_cleanup = Clock::now();
     auto death = last_cleanup - _max_age;
@@ -468,256 +472,7 @@ void TextGenerator::mark_start(Node* node)
     start.push_back(node);
 }
 
-struct TextGenerator::GraphFormatter
-{
-    using NodeIdMap = std::unordered_map<NodeId, Node*>;
-
-    GraphFormatter(std::ostream& output)
-        : stream(output.rdbuf())
-    {}
-
-    GraphFormatter(std::istream& input)
-        : stream(input.rdbuf())
-    {}
-
-    template<class Uint>
-        std::enable_if_t<std::is_unsigned<Uint>::value>
-        write(Uint value)
-    {
-        stream << value;
-    }
-
-    template<class Uint>
-        std::enable_if_t<std::is_unsigned<Uint>::value>
-        read(Uint& value)
-    {
-        if ( !(stream >> value) )
-            error();
-    }
-
-    template<class Container>
-        std::enable_if_t<sizeof(typename Container::value_type)>
-        write(const Container& value)
-    {
-        write(value.size());
-        for ( const auto& item : value )
-        {
-            write_separator(itemsep);
-            write(item);
-        }
-        write_separator(recordsep);
-    }
-
-    template<class ValueType>
-        void read(std::vector<ValueType>& container)
-    {
-        std::size_t size;
-        read(size);
-        container.reserve(size);
-        for ( std::size_t i = 0; i < size; i++ )
-        {
-            read_separator(itemsep);
-            ValueType value;
-            read(value);
-            container.emplace_back(std::move(value));
-        }
-        read_separator(recordsep);
-    }
-
-    void write(Node* node)
-    {
-        write(node ? node->id : 0);
-    }
-
-    void read(Node*& node)
-    {
-        NodeId node_id = 0;
-        read(node_id);
-        node = (Node*)(node_id);
-    }
-
-
-    void write(const Clock::time_point& time)
-    {
-        write(time::format_char(time::DateTime(time), 'c'));
-    }
-
-    void read(Clock::time_point& time)
-    {
-        std::string iso;
-        read(iso);
-        std::istringstream ss(iso); // this ensures we aren't eating up spaces
-        time = time::TimeParser(ss).parse_time_point().time_point();
-    }
-
-    void write_separator(char c)
-    {
-        stream.put(c);
-    }
-
-    void read_separator(char c)
-    {
-        if ( stream.get() != c )
-            error();
-    }
-
-    void write(const std::string& string)
-    {
-        stream.write(string.data(), string.size());
-    }
-
-    void read(std::string& string)
-    {
-        if ( !(stream >> string) )
-            error();
-    }
-
-    void write(const Node::Adjacency::value_type& item)
-    {
-        write(item.first);
-        write_separator(transsep);
-        write(item.second);
-    }
-
-    void write(const std::unique_ptr<Node>& node)
-    {
-        write(node.get());
-        write_separator(itemsep);
-        write(node->word);
-        write_separator(itemsep);
-        write(node->last_updated);
-        write_separator(recordsep);
-
-        write_separator(attrsep);
-        write(node->forward);
-
-        write_separator(attrsep);
-        write(node->backward);
-
-    }
-
-    void read(Node::Adjacency& adj)
-    {
-        std::size_t size;
-        read(size);
-        for ( std::size_t i = 0; i < size; i++ )
-        {
-            std::remove_const_t<Node::Adjacency::key_type> key;
-            read(key);
-            read_separator(transsep);
-            Node::Adjacency::mapped_type value;
-            read(value);
-            adj.insert({key, value});
-        }
-        read_separator(recordsep);
-    }
-
-    void read(std::unique_ptr<Node>& node)
-    {
-        read(node->last_updated);
-        read_separator(recordsep);
-
-        read_separator(attrsep);
-        read(node->forward);
-
-        read_separator(attrsep);
-        read(node->backward);
-    }
-
-    void write(const TextGenerator& tg)
-    {
-        write(tg.start);
-
-        write(tg.words.size());
-        write_separator(recordsep);
-        for ( const auto& item : tg.words )
-            write(item.second);
-    }
-
-    void read(TextGenerator& tg)
-    {
-        tg.words.clear();
-        tg.start.clear();
-
-        read(tg.start);
-
-        std::size_t size;
-        read(size);
-        read_separator(recordsep);
-
-        NodeIdMap node_ids;
-        for ( std::size_t i = 0; i < size; i++ )
-        {
-            NodeId id;
-            read(id);
-            read_separator(itemsep);
-
-            std::string word;
-            read(word);
-            read_separator(itemsep);
-
-            auto& ptr = tg.words[tg.normalize(word)];
-            if ( ptr )
-                error();
-
-            ptr = New<Node>(id, word);
-            read(ptr);
-            node_ids[id] = ptr.get();
-        }
-
-        translate(tg.start, node_ids);
-        for ( auto& item : tg.words )
-        {
-            translate(item.second->forward, node_ids);
-            translate(item.second->backward, node_ids);
-        }
-    }
-
-    void translate(std::vector<Node*>& nodes, const NodeIdMap& node_ids)
-    {
-        for ( auto& node : nodes )
-        {
-            node = translate(node, node_ids);
-        }
-    }
-
-    Node* translate(Node* node, const NodeIdMap& node_ids)
-    {
-        if ( !node )
-            return node;
-
-        auto iter = node_ids.find(NodeId(node));
-        if ( iter == node_ids.end() )
-            error();
-        return iter->second;
-    }
-
-    void translate(Node::Adjacency& adj_list, const NodeIdMap& node_ids)
-    {
-        Node::Adjacency new_list;
-        for ( const auto& item : adj_list )
-        {
-            new_list.insert({
-                translate(item.first, node_ids),
-                translate(item.second, node_ids)
-            });
-        }
-        adj_list = new_list;
-    }
-
-    static void error()
-    {
-        throw std::runtime_error("Invalid format");
-    }
-
-    std::iostream stream;
-    char itemsep = ' ';
-    char recordsep = '\n';
-    char attrsep = '\t';
-    char transsep = '~';
-};
-
-struct TextGenerator::GraphDotFormatter
+struct GraphDotFormatter
 {
     GraphDotFormatter(std::ostream& output)
         : stream(output.rdbuf())
@@ -785,6 +540,323 @@ struct TextGenerator::GraphDotFormatter
     std::ostream stream;
 };
 
+template<class TGen>
+class GraphFormatter
+{
+public:
+    using Generator = TGen&;
+    template<class T>
+        using ref = std::conditional_t<std::is_const<TGen>::value, const T&, T&>;
+    template<class T>
+        using noconst = std::conditional_t<std::is_const<TGen>::value, T, std::remove_const::t<T>>;
+    using Node = TextGenerator::Node;
+    using Words = ref<decltype(std::declval<TGen>().words)>;
+    using NodeOwner = ref<typename Words::mapped_type>;
+    using NodeId = TextGenerator::NodeId;
+    using AdjacencyItem = std::pair<noconst<Node::Adjacency::key_type>, Node::Adjacency::mapped_type>;
+    using Clock = TextGenerator::Clock;
+
+    void format(Generator generator)
+    {
+        prepare(generator);
+        format_node_list(generator, generator.start);
+        format_node_map(generator, generator.words);
+        finalize(generator);
+    }
+
+    static void error()
+    {
+        throw std::runtime_error("Invalid format");
+    }
+
+protected:
+    virtual void prepare(Generator generator) {}
+    virtual void finalize(Generator generator) {}
+    virtual void format_node_list(Generator generator, ref<std::vector<Node*>> nodes) = 0;
+    virtual void format_node_reference(ref<Node*> node) = 0;
+    virtual void format_node_map(Generator generator, Words map) = 0;
+    virtual void format_node(Generator generator, NodeOwner node) = 0;
+    virtual void format_adjacency_list(Generator generator, ref<Node::Adjacency> list) = 0;
+    virtual void format_adjacency_item(ref<AdjacencyItem> item) = 0;
+
+};
+
+class GraphTextOutput : public GraphFormatter<const TextGenerator>
+{
+public:
+    GraphTextOutput(std::ostream& output)
+        : stream(output.rdbuf())
+    {}
+
+protected:
+    void format_adjacency_list(Generator generator, ref<Node::Adjacency> list) override
+    {
+        write(list.size());
+        for ( const auto& item : list )
+        {
+            write_separator(itemsep);
+            format_adjacency_item(item);
+        }
+        write_separator(recordsep);
+    }
+
+    void format_node_list(Generator generator, ref<std::vector<Node*>> nodes) override
+    {
+        write(nodes.size());
+        for ( const auto& item : nodes )
+        {
+            write_separator(itemsep);
+            format_node_reference(item);
+        }
+        write_separator(recordsep);
+    }
+
+    void format_node_reference(Node* node) override
+    {
+        write(node ? node->id : 0);
+    }
+
+    void format_node_map(Generator generator, Words map) override
+    {
+        write(map.size());
+        write_separator(recordsep);
+        for ( const auto& item : map )
+            format_node(generator, item.second);
+    }
+
+    void format_node(Generator generator, NodeOwner node) override
+    {
+        format_node_reference(node.get());
+        write_separator(itemsep);
+        stream << node->word;
+        write_separator(itemsep);
+        if ( generator.limit_size() )
+            write_time(node->last_updated);
+        else
+            stream << "-";
+        write_separator(recordsep);
+
+        write_separator(attrsep);
+        format_adjacency_list(generator, node->forward);
+
+        write_separator(attrsep);
+        format_adjacency_list(generator, node->backward);
+    }
+
+    void format_adjacency_item(ref<AdjacencyItem> item) override
+    {
+        format_node_reference(item.first);
+        write_separator(transsep);
+        format_node_reference(item.second);
+    }
+
+private:
+    template<class Uint>
+        std::enable_if_t<std::is_unsigned<Uint>::value>
+        write(Uint value)
+    {
+        stream << value;
+    }
+
+    void write_separator(char c)
+    {
+        stream.put(c);
+    }
+
+    void write_time(const Clock::time_point& time)
+    {
+        stream << time::format_char(time::DateTime(time), 'c');
+    }
+
+    std::ostream stream;
+    char itemsep = ' ';
+    char recordsep = '\n';
+    char attrsep = '\t';
+    char transsep = '~';
+};
+
+
+class GraphTextInput : public GraphFormatter<TextGenerator>
+{
+public:
+    GraphTextOutput(std::istream& output)
+        : stream(output.rdbuf())
+    {}
+
+protected:
+    void format_node_list(Generator generator, ref<std::vector<Node*>> nodes) override
+    {
+        std::size_t size;
+        read(size);
+        nodes.reserve(size);
+        for ( std::size_t i = 0; i < size; i++ )
+        {
+            read_separator(itemsep);
+            Node* value;
+            format_node_reference(value);
+            nodes.emplace_back(std::move(value));
+        }
+        read_separator(recordsep);
+    }
+
+    void format_node_reference(ref<Node*> node) override
+    {
+        NodeId node_id = 0;
+        read(node_id);
+        node = (Node*)(node_id);
+    }
+
+    void format_adjacency_list(Generator generator, ref<Node::Adjacency> list) override
+    {
+        std::size_t size;
+        read(size);
+        read_separator(recordsep);
+        for ( std::size_t i = 0; i < size; i++ )
+        {
+            AdjacencyItem value;
+            format_adjacency_item(value);
+            list.insert({value.first, value.second});
+        }
+        read_separator(recordsep);
+    }
+
+    void format_adjacency_item(ref<AdjacencyItem> item)
+    {
+        read_separator(attrsep);
+        format_node_reference(item.first);
+        read_separator(transsep);
+        format_node_reference(item.second);
+        read_separator(recordsep);
+    }
+
+    void format_node(Generator generator, NodeOwner node)
+    {
+        read(node->last_updated);
+        read_separator(recordsep);
+
+        read_separator(attrsep);
+        read(node->forward);
+
+        read_separator(attrsep);
+        read(node->backward);
+    }
+
+    void format_node_map(Generator generator, Words map) override
+    {
+        map.clear();
+
+        std::size_t size;
+        read(size);
+        read_separator(recordsep);
+        for ( std::size_t i = 0; i < size; i++ )
+        {
+            NodeId id;
+            read(id);
+            read_separator(itemsep);
+
+            std::string word;
+            read(word);
+            read_separator(itemsep);
+
+            auto& ptr = map[generator.normalize(word)];
+            if ( ptr )
+                error();
+
+            ptr = New<Node>(id, word);
+            format_node(ptr);
+            node_ids[id] = ptr.get();
+        }
+    }
+
+    void prepare(Generator generator) override
+    {
+        node_ids.clear();
+    }
+
+    void finalize(Generator generator) override
+    {
+        translate(generator.start, node_ids);
+        for ( auto& item : generator.words )
+        {
+            translate(item.second->forward, node_ids);
+            translate(item.second->backward, node_ids);
+        }
+    }
+
+private:
+    template<class Uint>
+        std::enable_if_t<std::is_unsigned<Uint>::value>
+        read(Uint& value)
+    {
+        if ( !(stream >> value) )
+            error();
+    }
+
+    void read(std::string& string)
+    {
+        if ( !(stream >> string) )
+            error();
+    }
+
+    void read_separator(char c)
+    {
+        if ( stream.get() != c )
+            error();
+    }
+
+    void read(Clock::time_point& time)
+    {
+        std::string iso;
+        read(iso);
+        if ( iso != "-" )
+        {
+            std::istringstream ss(iso);
+            time = time::TimeParser(ss).parse_time_point().time_point();
+        }
+    }
+
+    void translate(std::vector<Node*>& nodes, const NodeIdMap& node_ids)
+    {
+        for ( auto& node : nodes )
+        {
+            node = translate(node, node_ids);
+        }
+    }
+
+    Node* translate(Node* node, const NodeIdMap& node_ids)
+    {
+        if ( !node )
+            return node;
+
+        auto iter = node_ids.find(NodeId(node));
+        if ( iter == node_ids.end() )
+            error();
+        return iter->second;
+    }
+
+    void translate(Node::Adjacency& adj_list, const NodeIdMap& node_ids)
+    {
+        Node::Adjacency new_list;
+        for ( const auto& item : adj_list )
+        {
+            new_list.insert({
+                translate(item.first, node_ids),
+                translate(item.second, node_ids)
+            });
+        }
+        adj_list = new_list;
+    }
+
+    using NodeIdMap = std::unordered_map<NodeId, Node*>;
+
+
+    std::istream stream;
+    char itemsep = ' ';
+    char recordsep = '\n';
+    char attrsep = '\t';
+    char transsep = '~';
+    NodeIdMap node_ids;
+};
 void TextGenerator::store(std::ostream& output, StorageFormat format) const
 {
     std::lock_guard<std::mutex> lock(mutex);
