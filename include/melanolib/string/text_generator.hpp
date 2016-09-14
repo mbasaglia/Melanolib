@@ -187,6 +187,45 @@ public:
      */
     Stats stats() const;
 
+protected:
+    /**
+     * \brief Input token
+     */
+    struct Token
+    {
+        std::string text; ///< Token contents
+        bool is_start = false; ///< Whether it should mark the start of a phrase
+        bool is_end = false; ///< Whether it should mark the end of a phrase
+
+        /**
+         * \brief Whether the token is valid
+         *
+         * (ie: \b text is not empty)
+         */
+        bool valid() const
+        {
+            return !text.empty();
+        }
+    };
+
+    /**
+     * \brief Shall read a Token from the input stream, marking is_start and
+     * is_end when appropriate.
+     *
+     * When the first invalid (empty) token is returned, the rest of the input
+     * is discarded and the last valid token is marked as an ending point.
+     */
+    virtual Token next_token(std::istream& input) const;
+
+    /**
+     * \brief Returns a normalized form for the input word, ensuring
+     * two normalized values are equal iff the input strings are equivalent
+     *
+     * This is useful multiple strings may be considered as equivalent,
+     * eg: to make this case-insensitive
+     */
+    virtual std::string normalize(const std::string& word) const;
+
 private:
     void expand(
         Direction direction,
@@ -216,7 +255,7 @@ private:
     void cleanup_unlocked();
 
     std::vector<Node*> start;
-    std::unordered_map<std::string, std::unique_ptr<Node>, ICaseHasher, ICaseComparator> words;
+    std::unordered_map<std::string, std::unique_ptr<Node>> words;
     std::size_t _max_size;
     time::days _max_age;
     Clock::time_point last_cleanup = Clock::time_point::min();

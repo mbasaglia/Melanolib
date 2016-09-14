@@ -195,6 +195,36 @@ TextGenerator& TextGenerator::operator=(TextGenerator&& oth)
 TextGenerator::~TextGenerator()
 {}
 
+std::string TextGenerator::normalize(const std::string& word) const
+{
+    return strtolower(word);
+}
+
+TextGenerator::Token TextGenerator::next_token(std::istream& input) const
+{
+    Token token;
+
+    // skip whitespaces
+    int ch = ' ';
+    while ( ascii::is_space(ch) && input.good() )
+    {
+        ch = input.get();
+        // On newline, mark the next item as a good starting point
+        if ( ch == '\n' )
+            token.is_start = true;
+    }
+    if ( !input.good() )
+        return {};
+    input.unget();
+
+    if ( !(input >> token.text) )
+        return {};
+
+    token.is_end = token.text.back() == '.' || token.text.back() == '!' ||
+                   token.text.back() == '?';
+    return token;
+}
+
 void TextGenerator::add_text(std::istream& stream)
 {
     static const uint8_t is_begin = 1;
@@ -202,41 +232,27 @@ void TextGenerator::add_text(std::istream& stream)
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    std::string word;
     std::deque<std::pair<Node*, uint8_t>> context;
 
     bool at_bounday = true;
     while ( stream.good() )
     {
-        // skip whitespaces
-        int ch = ' ';
-        while ( ascii::is_space(ch) && stream.good() )
-        {
-            ch = stream.get();
-            // On newline, mark the last item as a good ending point
-            if ( ch == '\n' )
-            {
-                if ( !context.empty() )
-                    context.back().second |= is_end;
-                at_bounday = true;
-            }
-        }
-        if ( !stream.good() )
-            break;
-        stream.unget();
-
-        if ( !(stream >> word) )
+        Token token = next_token(stream);
+        if ( !token.valid() || !stream )
             break;
 
-        Node* node = node_for(word);
+        if ( token.is_start && !context.empty() )
+            context.back().second |= is_end;
+
+        Node* node = node_for(token.text);
         uint8_t flags = 0;
-        if ( at_bounday )
+        if ( at_bounday || token.is_start )
         {
             mark_start(node);
             flags |= is_begin;
         }
         // If the current word ends with a period, is a good ending point
-        at_bounday = word.back() == '.' || stream.eof();
+        at_bounday = token.is_end || stream.eof();
         if ( at_bounday )
             flags |= is_end;
 
@@ -426,7 +442,7 @@ void TextGenerator::generate(
 
 TextGenerator::Node* TextGenerator::node_for_nocreate(const std::string& word) const
 {
-    auto iter = words.find(word);
+    auto iter = words.find(normalize(word));
     if ( iter == words.end() )
         return nullptr;
     return iter->second.get();
@@ -434,7 +450,7 @@ TextGenerator::Node* TextGenerator::node_for_nocreate(const std::string& word) c
 
 TextGenerator::Node* TextGenerator::node_for(const std::string& word)
 {
-    auto& node = words[word];
+    auto& node = words[normalize(word)];
 
     if ( !node )
         node = New<Node>(id_pool.get_id(), word);
@@ -640,7 +656,7 @@ struct TextGenerator::GraphFormatter
             read(word);
             read_separator(itemsep);
 
-            auto& ptr = tg.words[word];
+            auto& ptr = tg.words[tg.normalize(word)];
             if ( ptr )
                 error();
 
