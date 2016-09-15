@@ -104,9 +104,14 @@ public:
      *
      * Depending on the available data, it might end up with fewer words.
      * \p max_words is a hard upper limit.
+     *
+     * It will attempt to generate at least \p min_words.
+     * After \p enough_words it will try to find a good ending spot.
+     * After \p max_words it will stop even if it isn't on a terminating node.
      */
     std::vector<std::string> generate_words(
         std::size_t min_words,
+        std::size_t enough_words,
         std::size_t max_words) const;
 
     /**
@@ -116,10 +121,15 @@ public:
      *
      * Depending on the available data, it might end up with fewer words.
      * \p max_words is a hard upper limit.
+     *
+     * It will attempt to generate at least \p min_words.
+     * After \p enough_words it will try to find a good ending spot.
+     * After \p max_words it will stop even if it isn't on a terminating node.
      */
     std::vector<std::string> generate_words(
         const std::string& prompt,
         std::size_t min_words,
+        std::size_t enough_words,
         std::size_t max_words) const;
 
     /**
@@ -130,9 +140,10 @@ public:
      */
     std::string generate_string(
         std::size_t min_words,
+        std::size_t enough_words,
         std::size_t max_words) const
     {
-        return implode(" ", generate_words(min_words, max_words));
+        return join(generate_words(min_words, enough_words, max_words));
     }
 
     /**
@@ -146,9 +157,10 @@ public:
     std::string generate_string(
         const std::string& prompt,
         std::size_t min_words,
+        std::size_t enough_words,
         std::size_t max_words) const
     {
-        return implode(" ", generate_words(prompt, min_words, max_words));
+        return join(generate_words(prompt, min_words, enough_words, max_words));
     }
 
     /**
@@ -233,6 +245,13 @@ protected:
      * eg: to make this case-insensitive
      */
     virtual std::string normalize(const std::string& word) const;
+
+    virtual std::string join(const std::vector<std::string>& words) const
+    {
+        return implode(" ", words);
+    }
+
+    virtual std::vector<std::string> split(const std::string& words) const;
 
 private:
     void expand(

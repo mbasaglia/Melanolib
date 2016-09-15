@@ -289,6 +289,7 @@ void TextGenerator::add_text(std::istream& stream)
 
 std::vector<std::string> TextGenerator::generate_words(
     std::size_t min_words,
+    std::size_t enough_words,
     std::size_t max_words) const
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -301,19 +302,25 @@ std::vector<std::string> TextGenerator::generate_words(
         Direction::Forward,
         start[math::random(start.size()-1)]
     );
-    generate(iterator, words, min_words, min_words, max_words);
+    generate(iterator, words, min_words, enough_words, max_words);
     return words;
+}
+
+std::vector<std::string> TextGenerator::split(const std::string& words) const
+{
+    return regex_split(words, "\\s+");
 }
 
 std::vector<std::string> TextGenerator::generate_words(
     const std::string& prompt,
     std::size_t min_words,
+    std::size_t enough_words,
     std::size_t max_words) const
 {
-    std::vector<std::string> words = regex_split(prompt, "\\s+");
+    std::vector<std::string> words = split(prompt);
 
     if ( words.empty() )
-        return generate_words(min_words, max_words);
+        return generate_words(min_words, enough_words, max_words);
 
     std::lock_guard<std::mutex> lock(mutex);
     if ( start.empty() || words.size() >= max_words )
@@ -321,7 +328,7 @@ std::vector<std::string> TextGenerator::generate_words(
 
     words.reserve(max_words);
     expand(Direction::Backward, words, 0, min_words, max_words);
-    expand(Direction::Forward, words, min_words, min_words, max_words);
+    expand(Direction::Forward, words, min_words, enough_words, max_words);
     return words;
 }
 
