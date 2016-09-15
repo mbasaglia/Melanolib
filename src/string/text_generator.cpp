@@ -472,8 +472,8 @@ struct TextGenerator::GraphFormatter
 {
     using NodeIdMap = std::unordered_map<NodeId, Node*>;
 
-    GraphFormatter(std::ostream& output)
-        : stream(output.rdbuf())
+    GraphFormatter(std::ostream& output, bool write_times)
+        : stream(output.rdbuf()), write_times(write_times)
     {}
 
     GraphFormatter(std::istream& input)
@@ -546,8 +546,11 @@ struct TextGenerator::GraphFormatter
     {
         std::string iso;
         read(iso);
-        std::istringstream ss(iso); // this ensures we aren't eating up spaces
-        time = time::TimeParser(ss).parse_time_point().time_point();
+        if ( iso != "-" )
+        {
+            std::istringstream ss(iso); // this ensures we aren't eating up spaces
+            time = time::TimeParser(ss).parse_time_point().time_point();
+        }
     }
 
     void write_separator(char c)
@@ -585,7 +588,10 @@ struct TextGenerator::GraphFormatter
         write_separator(itemsep);
         write(node->word);
         write_separator(itemsep);
-        write(node->last_updated);
+        if ( !write_times )
+            write("-");
+        else
+            write(node->last_updated);
         write_separator(recordsep);
 
         write_separator(attrsep);
@@ -715,6 +721,7 @@ struct TextGenerator::GraphFormatter
     char recordsep = '\n';
     char attrsep = '\t';
     char transsep = '~';
+    bool write_times = true;
 };
 
 struct TextGenerator::GraphDotFormatter
@@ -789,7 +796,7 @@ void TextGenerator::store(std::ostream& output, StorageFormat format) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     if ( format == StorageFormat::TextPlain )
-        GraphFormatter(output).write(*this);
+        GraphFormatter(output, limit_size()).write(*this);
     else if ( format == StorageFormat::Dot )
         GraphDotFormatter(output).write(*this);
     else

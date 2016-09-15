@@ -187,6 +187,14 @@ public:
      */
     Stats stats() const;
 
+    /**
+     * \brief whether the generator limits the number of known words
+     */
+    bool limit_size() const
+    {
+        return _max_size != std::numeric_limits<std::size_t>::max();
+    }
+
 protected:
     /**
      * \brief Input token
