@@ -81,7 +81,7 @@ public:
     TextGenerator(TextGenerator&& oth);
     TextGenerator& operator=(TextGenerator&& oth);
 
-    ~TextGenerator();
+    virtual ~TextGenerator();
 
     /**
      * \brief Parses the contents of \p stream and adds the required states to
@@ -246,11 +246,14 @@ protected:
      */
     virtual std::string normalize(const std::string& word) const;
 
-    virtual std::string join(const std::vector<std::string>& words) const
-    {
-        return implode(" ", words);
-    }
+    /**
+     * \brief Joins a sequence of generated items into a single string
+     */
+    virtual std::string join(const std::vector<std::string>& words) const;
 
+    /**
+     * \brief Splits a prompt into a sequence of words
+     */
     virtual std::vector<std::string> split(const std::string& words) const;
 
 private:

@@ -306,6 +306,11 @@ std::vector<std::string> TextGenerator::generate_words(
     return words;
 }
 
+std::string TextGenerator::join(const std::vector<std::string>& words) const
+{
+    return implode(" ", words);
+}
+
 std::vector<std::string> TextGenerator::split(const std::string& words) const
 {
     return regex_split(words, "\\s+");
