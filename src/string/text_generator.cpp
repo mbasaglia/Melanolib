@@ -667,6 +667,7 @@ struct TextGenerator::GraphFormatter
                 error();
 
             ptr = New<Node>(id, word);
+            tg.id_pool.mark_id(id);
             read(ptr);
             node_ids[id] = ptr.get();
         }
