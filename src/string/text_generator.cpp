@@ -238,7 +238,7 @@ void TextGenerator::add_text(std::istream& stream)
     while ( stream.good() )
     {
         Token token = next_token(stream);
-        if ( !token.valid() || !stream )
+        if ( !token.valid() )
             break;
 
         if ( token.is_start && !context.empty() )
