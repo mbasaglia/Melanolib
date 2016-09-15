@@ -502,21 +502,29 @@ struct TextGenerator::GraphFormatter
             error();
     }
 
-    template<class Container>
-        std::enable_if_t<sizeof(typename Container::value_type)>
-        write(const Container& value)
+    void write_node_list(const std::vector<Node*>& value)
     {
         write(value.size());
         for ( const auto& item : value )
         {
             write_separator(itemsep);
-            write(item);
+            write_node_ref(item);
         }
         write_separator(recordsep);
     }
 
-    template<class ValueType>
-        void read(std::vector<ValueType>& container)
+    void write_adjacency(const Node::Adjacency& value)
+    {
+        write(value.size());
+        for ( const auto& item : value )
+        {
+            write_separator(itemsep);
+            write_adjacency_item(item);
+        }
+        write_separator(recordsep);
+    }
+
+    void read_node_list(std::vector<Node*>& container)
     {
         std::size_t size;
         read(size);
@@ -524,32 +532,32 @@ struct TextGenerator::GraphFormatter
         for ( std::size_t i = 0; i < size; i++ )
         {
             read_separator(itemsep);
-            ValueType value;
-            read(value);
-            container.emplace_back(std::move(value));
+            container.emplace_back(read_node_ref());
         }
         read_separator(recordsep);
     }
 
-    void write(Node* node)
+    void write_node_ref(Node* node)
     {
         write(node ? node->id : 0);
     }
 
-    void read(Node*& node)
+    Node* read_node_ref()
     {
         NodeId node_id = 0;
         read(node_id);
-        node = (Node*)(node_id);
+        return (Node*)(node_id);
     }
 
-
-    void write(const Clock::time_point& time)
+    void write_time(const Clock::time_point& time)
     {
-        write(time::format_char(time::DateTime(time), 'c'));
+        if ( !write_times )
+            write("-");
+        else
+            write(time::format_char(time::DateTime(time), 'c'));
     }
 
-    void read(Clock::time_point& time)
+    void read_time(Clock::time_point& time)
     {
         std::string iso;
         read(iso);
@@ -582,69 +590,61 @@ struct TextGenerator::GraphFormatter
             error();
     }
 
-    void write(const Node::Adjacency::value_type& item)
+    void write_adjacency_item(const Node::Adjacency::value_type& item)
     {
-        write(item.first);
+        write_node_ref(item.first);
         write_separator(transsep);
-        write(item.second);
+        write_node_ref(item.second);
     }
 
-    void write(const std::unique_ptr<Node>& node)
+    void write_node(const std::unique_ptr<Node>& node)
     {
-        write(node.get());
+        write_node_ref(node.get());
+        write_separator(itemsep);
+        write_time(node->last_updated);
         write_separator(itemsep);
         write(node->word);
-        write_separator(itemsep);
-        if ( !write_times )
-            write("-");
-        else
-            write(node->last_updated);
         write_separator(recordsep);
 
         write_separator(attrsep);
-        write(node->forward);
+        write_adjacency(node->forward);
 
         write_separator(attrsep);
-        write(node->backward);
+        write_adjacency(node->backward);
 
     }
 
-    void read(Node::Adjacency& adj)
+    void read_adjacency(Node::Adjacency& adj)
     {
         std::size_t size;
         read(size);
         for ( std::size_t i = 0; i < size; i++ )
         {
-            std::remove_const_t<Node::Adjacency::key_type> key;
-            read(key);
+            std::remove_const_t<Node::Adjacency::key_type> key = read_node_ref();
             read_separator(transsep);
-            Node::Adjacency::mapped_type value;
-            read(value);
+            Node::Adjacency::mapped_type value = read_node_ref();
             adj.insert({key, value});
         }
         read_separator(recordsep);
     }
 
-    void read(std::unique_ptr<Node>& node)
+    void read_node(std::unique_ptr<Node>& node)
     {
-        read(node->last_updated);
-        read_separator(recordsep);
+        read_separator(attrsep);
+        read_adjacency(node->forward);
 
         read_separator(attrsep);
-        read(node->forward);
-
-        read_separator(attrsep);
-        read(node->backward);
+        read_adjacency(node->backward);
     }
 
     void write(const TextGenerator& tg)
     {
-        write(tg.start);
+        write_node_list(tg.start);
 
         write(tg.words.size());
         write_separator(recordsep);
         for ( const auto& item : tg.words )
-            write(item.second);
+            write_node(item.second);
     }
 
     void read(TextGenerator& tg)
@@ -652,7 +652,7 @@ struct TextGenerator::GraphFormatter
         tg.words.clear();
         tg.start.clear();
 
-        read(tg.start);
+        read_node_list(tg.start);
 
         std::size_t size;
         read(size);
@@ -663,11 +663,14 @@ struct TextGenerator::GraphFormatter
         {
             NodeId id;
             read(id);
-            read_separator(itemsep);
 
-            std::string word;
-            read(word);
             read_separator(itemsep);
+            Clock::time_point last_updated;
+            read_time(last_updated);
+
+            read_separator(itemsep);
+            std::string word;
+            std::getline(stream, word, recordsep);
 
             auto& ptr = tg.words[tg.normalize(word)];
             if ( ptr )
@@ -675,7 +678,7 @@ struct TextGenerator::GraphFormatter
 
             ptr = New<Node>(id, word);
             tg.id_pool.mark_id(id);
-            read(ptr);
+            read_node(ptr);
             node_ids[id] = ptr.get();
         }
 
