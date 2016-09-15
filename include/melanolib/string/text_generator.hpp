@@ -290,6 +290,87 @@ private:
     mutable std::mutex mutex;
 };
 
+/**
+ * \brief Markov word generator
+ */
+class WordGenerator : public TextGenerator
+{
+public:
+    WordGenerator(
+        std::size_t chunk_size = 1,
+        std::size_t max_size = 65535,
+        time::days max_age = time::days(30))
+    : TextGenerator(max_size, max_age),
+      _chunk_size(chunk_size)
+    {}
+
+    std::size_t chunk_size() const
+    {
+        return _chunk_size;
+    }
+
+    void set_chunk_size(std::size_t chunk_size)
+    {
+        _chunk_size = chunk_size;
+    }
+
+protected:
+    Token next_token(std::istream& input) const override
+    {
+        Token token;
+
+        while ( token.text.size() < _chunk_size )
+        {
+            int ch = input.get();
+
+            if ( !input )
+                break;
+
+            if ( ascii::is_space(ch) )
+            {
+                token.text += ' ';
+                do
+                    ch = input.get();
+                while ( ascii::is_space(ch) );
+                if ( input )
+                    input.unget();
+            }
+            else
+            {
+                token.text += ch;
+            }
+        }
+        return token;
+    }
+
+    std::string normalize(const std::string& word) const override
+    {
+        return word;
+    }
+
+    std::string join(const std::vector<std::string>& words) const override
+    {
+        return std::accumulate(words.begin(), words.end(), std::string{});
+    }
+
+    std::vector<std::string> split(const std::string& words) const override
+    {
+        std::vector<std::string> result;
+        if ( ! words.empty() )
+        {
+            result.reserve(words.size() / _chunk_size);
+            std::size_t i;
+            for ( i = 0; i + _chunk_size < words.size(); i += _chunk_size )
+                result.push_back(words.substr(i, _chunk_size));
+            result.push_back(words.substr(i));
+        }
+        return result;
+    }
+
+private:
+    std::size_t _chunk_size;
+};
+
 } // namespace string
 } // namespace melanolib
 #endif // MELANOLIB_STRING_TEXT_GENERATOR_HPP
