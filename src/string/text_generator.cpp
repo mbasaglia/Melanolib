@@ -41,8 +41,8 @@ struct TextGenerator::Node
         ShouldExit,
     };
 
-    explicit Node(std::string word)
-        : word(std::move(word))
+    explicit Node(NodeId id, std::string word)
+        : word(std::move(word)), id(id)
     {
         bump();
     }
@@ -132,6 +132,7 @@ struct TextGenerator::Node
     Adjacency forward;
     Adjacency backward;
     Clock::time_point last_updated;
+    NodeId id;
 };
 
 
@@ -194,6 +195,36 @@ TextGenerator& TextGenerator::operator=(TextGenerator&& oth)
 TextGenerator::~TextGenerator()
 {}
 
+std::string TextGenerator::normalize(const std::string& word) const
+{
+    return strtolower(word);
+}
+
+TextGenerator::Token TextGenerator::next_token(std::istream& input) const
+{
+    Token token;
+
+    // skip whitespaces
+    int ch = ' ';
+    while ( ascii::is_space(ch) && input.good() )
+    {
+        ch = input.get();
+        // On newline, mark the next item as a good starting point
+        if ( ch == '\n' )
+            token.is_start = true;
+    }
+    if ( !input.good() )
+        return {};
+    input.unget();
+
+    if ( !(input >> token.text) )
+        return {};
+
+    token.is_end = token.text.back() == '.' || token.text.back() == '!' ||
+                   token.text.back() == '?';
+    return token;
+}
+
 void TextGenerator::add_text(std::istream& stream)
 {
     static const uint8_t is_begin = 1;
@@ -201,41 +232,27 @@ void TextGenerator::add_text(std::istream& stream)
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    std::string word;
     std::deque<std::pair<Node*, uint8_t>> context;
 
     bool at_bounday = true;
     while ( stream.good() )
     {
-        // skip whitespaces
-        int ch = ' ';
-        while ( ascii::is_space(ch) && stream.good() )
-        {
-            ch = stream.get();
-            // On newline, mark the last item as a good ending point
-            if ( ch == '\n' )
-            {
-                if ( !context.empty() )
-                    context.back().second |= is_end;
-                at_bounday = true;
-            }
-        }
-        if ( !stream.good() )
-            break;
-        stream.unget();
-
-        if ( !(stream >> word) )
+        Token token = next_token(stream);
+        if ( !token.valid() )
             break;
 
-        Node* node = node_for(word);
+        if ( token.is_start && !context.empty() )
+            context.back().second |= is_end;
+
+        Node* node = node_for(token.text);
         uint8_t flags = 0;
-        if ( at_bounday )
+        if ( at_bounday || token.is_start )
         {
             mark_start(node);
             flags |= is_begin;
         }
         // If the current word ends with a period, is a good ending point
-        at_bounday = word.back() == '.' || stream.eof();
+        at_bounday = token.is_end || stream.eof();
         if ( at_bounday )
             flags |= is_end;
 
@@ -272,6 +289,7 @@ void TextGenerator::add_text(std::istream& stream)
 
 std::vector<std::string> TextGenerator::generate_words(
     std::size_t min_words,
+    std::size_t enough_words,
     std::size_t max_words) const
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -284,19 +302,30 @@ std::vector<std::string> TextGenerator::generate_words(
         Direction::Forward,
         start[math::random(start.size()-1)]
     );
-    generate(iterator, words, min_words, min_words, max_words);
+    generate(iterator, words, min_words, enough_words, max_words);
     return words;
+}
+
+std::string TextGenerator::join(const std::vector<std::string>& words) const
+{
+    return implode(" ", words);
+}
+
+std::vector<std::string> TextGenerator::split(const std::string& words) const
+{
+    return regex_split(words, "\\s+");
 }
 
 std::vector<std::string> TextGenerator::generate_words(
     const std::string& prompt,
     std::size_t min_words,
+    std::size_t enough_words,
     std::size_t max_words) const
 {
-    std::vector<std::string> words = regex_split(prompt, "\\s+");
+    std::vector<std::string> words = split(prompt);
 
     if ( words.empty() )
-        return generate_words(min_words, max_words);
+        return generate_words(min_words, enough_words, max_words);
 
     std::lock_guard<std::mutex> lock(mutex);
     if ( start.empty() || words.size() >= max_words )
@@ -304,7 +333,7 @@ std::vector<std::string> TextGenerator::generate_words(
 
     words.reserve(max_words);
     expand(Direction::Backward, words, 0, min_words, max_words);
-    expand(Direction::Forward, words, min_words, min_words, max_words);
+    expand(Direction::Forward, words, min_words, enough_words, max_words);
     return words;
 }
 
@@ -425,7 +454,7 @@ void TextGenerator::generate(
 
 TextGenerator::Node* TextGenerator::node_for_nocreate(const std::string& word) const
 {
-    auto iter = words.find(word);
+    auto iter = words.find(normalize(word));
     if ( iter == words.end() )
         return nullptr;
     return iter->second.get();
@@ -433,10 +462,10 @@ TextGenerator::Node* TextGenerator::node_for_nocreate(const std::string& word) c
 
 TextGenerator::Node* TextGenerator::node_for(const std::string& word)
 {
-    auto& node = words[word];
+    auto& node = words[normalize(word)];
 
     if ( !node )
-        node = New<Node>(word);
+        node = New<Node>(id_pool.get_id(), word);
     else
         node->bump();
 
@@ -453,11 +482,10 @@ void TextGenerator::mark_start(Node* node)
 
 struct TextGenerator::GraphFormatter
 {
-    using NodeId = uintptr_t;
     using NodeIdMap = std::unordered_map<NodeId, Node*>;
 
-    GraphFormatter(std::ostream& output)
-        : stream(output.rdbuf())
+    GraphFormatter(std::ostream& output, bool write_times)
+        : stream(output.rdbuf()), write_times(write_times)
     {}
 
     GraphFormatter(std::istream& input)
@@ -479,21 +507,29 @@ struct TextGenerator::GraphFormatter
             error();
     }
 
-    template<class Container>
-        std::enable_if_t<sizeof(typename Container::value_type)>
-        write(const Container& value)
+    void write_node_list(const std::vector<Node*>& value)
     {
         write(value.size());
         for ( const auto& item : value )
         {
             write_separator(itemsep);
-            write(item);
+            write_node_ref(item);
         }
         write_separator(recordsep);
     }
 
-    template<class ValueType>
-        void read(std::vector<ValueType>& container)
+    void write_adjacency(const Node::Adjacency& value)
+    {
+        write(value.size());
+        for ( const auto& item : value )
+        {
+            write_separator(itemsep);
+            write_adjacency_item(item);
+        }
+        write_separator(recordsep);
+    }
+
+    void read_node_list(std::vector<Node*>& container)
     {
         std::size_t size;
         read(size);
@@ -501,37 +537,40 @@ struct TextGenerator::GraphFormatter
         for ( std::size_t i = 0; i < size; i++ )
         {
             read_separator(itemsep);
-            ValueType value;
-            read(value);
-            container.emplace_back(std::move(value));
+            container.emplace_back(read_node_ref());
         }
         read_separator(recordsep);
     }
 
-    void write(Node* node)
+    void write_node_ref(Node* node)
     {
-        write(NodeId(node));
+        write(node ? node->id : 0);
     }
 
-    void read(Node*& node)
+    Node* read_node_ref()
     {
         NodeId node_id = 0;
         read(node_id);
-        node = (Node*)(node_id);
+        return (Node*)(node_id);
     }
 
-
-    void write(const Clock::time_point& time)
+    void write_time(const Clock::time_point& time)
     {
-        write(time::format_char(time::DateTime(time), 'c'));
+        if ( !write_times )
+            write("-");
+        else
+            write(time::format_char(time::DateTime(time), 'c'));
     }
 
-    void read(Clock::time_point& time)
+    void read_time(Clock::time_point& time)
     {
         std::string iso;
         read(iso);
-        std::istringstream ss(iso); // this ensures we aren't eating up spaces
-        time = time::TimeParser(ss).parse_time_point().time_point();
+        if ( iso != "-" )
+        {
+            std::istringstream ss(iso); // this ensures we aren't eating up spaces
+            time = time::TimeParser(ss).parse_time_point().time_point();
+        }
     }
 
     void write_separator(char c)
@@ -556,66 +595,61 @@ struct TextGenerator::GraphFormatter
             error();
     }
 
-    void write(const Node::Adjacency::value_type& item)
+    void write_adjacency_item(const Node::Adjacency::value_type& item)
     {
-        write(item.first);
+        write_node_ref(item.first);
         write_separator(transsep);
-        write(item.second);
+        write_node_ref(item.second);
     }
 
-    void write(const std::unique_ptr<Node>& node)
+    void write_node(const std::unique_ptr<Node>& node)
     {
-        write(node.get());
+        write_node_ref(node.get());
+        write_separator(itemsep);
+        write_time(node->last_updated);
         write_separator(itemsep);
         write(node->word);
-        write_separator(itemsep);
-        write(node->last_updated);
         write_separator(recordsep);
 
         write_separator(attrsep);
-        write(node->forward);
+        write_adjacency(node->forward);
 
         write_separator(attrsep);
-        write(node->backward);
+        write_adjacency(node->backward);
 
     }
 
-    void read(Node::Adjacency& adj)
+    void read_adjacency(Node::Adjacency& adj)
     {
         std::size_t size;
         read(size);
         for ( std::size_t i = 0; i < size; i++ )
         {
-            std::remove_const_t<Node::Adjacency::key_type> key;
-            read(key);
+            std::remove_const_t<Node::Adjacency::key_type> key = read_node_ref();
             read_separator(transsep);
-            Node::Adjacency::mapped_type value;
-            read(value);
+            Node::Adjacency::mapped_type value = read_node_ref();
             adj.insert({key, value});
         }
         read_separator(recordsep);
     }
 
-    void read(std::unique_ptr<Node>& node)
+    void read_node(std::unique_ptr<Node>& node)
     {
-        read(node->last_updated);
-        read_separator(recordsep);
+        read_separator(attrsep);
+        read_adjacency(node->forward);
 
         read_separator(attrsep);
-        read(node->forward);
-
-        read_separator(attrsep);
-        read(node->backward);
+        read_adjacency(node->backward);
     }
 
     void write(const TextGenerator& tg)
     {
-        write(tg.start);
+        write_node_list(tg.start);
 
         write(tg.words.size());
         write_separator(recordsep);
         for ( const auto& item : tg.words )
-            write(item.second);
+            write_node(item.second);
     }
 
     void read(TextGenerator& tg)
@@ -623,7 +657,7 @@ struct TextGenerator::GraphFormatter
         tg.words.clear();
         tg.start.clear();
 
-        read(tg.start);
+        read_node_list(tg.start);
 
         std::size_t size;
         read(size);
@@ -634,18 +668,22 @@ struct TextGenerator::GraphFormatter
         {
             NodeId id;
             read(id);
-            read_separator(itemsep);
 
+            read_separator(itemsep);
+            Clock::time_point last_updated;
+            read_time(last_updated);
+
+            read_separator(itemsep);
             std::string word;
-            read(word);
-            read_separator(itemsep);
+            std::getline(stream, word, recordsep);
 
-            auto& ptr = tg.words[word];
+            auto& ptr = tg.words[tg.normalize(word)];
             if ( ptr )
                 error();
 
-            ptr = New<Node>(word);
-            read(ptr);
+            ptr = New<Node>(id, word);
+            tg.id_pool.mark_id(id);
+            read_node(ptr);
             node_ids[id] = ptr.get();
         }
 
@@ -699,6 +737,7 @@ struct TextGenerator::GraphFormatter
     char recordsep = '\n';
     char attrsep = '\t';
     char transsep = '~';
+    bool write_times = true;
 };
 
 struct TextGenerator::GraphDotFormatter
@@ -716,7 +755,7 @@ struct TextGenerator::GraphDotFormatter
         if ( !node )
             stream << "finish";
         else
-            stream << (uintptr_t(node));
+            stream << (node ? node->id : 0);
     }
 
     void write_label(Node* node)
@@ -773,7 +812,7 @@ void TextGenerator::store(std::ostream& output, StorageFormat format) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     if ( format == StorageFormat::TextPlain )
-        GraphFormatter(output).write(*this);
+        GraphFormatter(output, limit_size()).write(*this);
     else if ( format == StorageFormat::Dot )
         GraphDotFormatter(output).write(*this);
     else
