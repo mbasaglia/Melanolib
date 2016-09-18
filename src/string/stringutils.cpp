@@ -19,6 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "melanolib/string/stringutils.hpp"
+#include "melanolib/math/math.hpp"
 
 namespace melanolib {
 namespace string {
@@ -256,7 +257,7 @@ std::string pretty_bytes(uint64_t bytes)
         bytes /= unit;
     }
 
-    remainder = std::round(remainder / double(unit) * 10) / 10;
+    remainder = math::round<uint64_t>(remainder / double(unit) * 10) / 10;
 
     return std::to_string(bytes) + '.' + std::to_string(remainder) + ' ' + units[i];
 }
