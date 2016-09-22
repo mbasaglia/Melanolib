@@ -39,20 +39,22 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/include)
 add_subdirectory(src)
 
-# Tests
-set(LCOV_SOURCE_BASE_DIR "${CMAKE_SOURCE_DIR}")
-set(LCOV_REMOVE_PATTERN "test/*.cpp")
-include(testing)
-add_subdirectory(test)
+if(CMAKE_SOURCE_DIR EQUAL CMAKE_CURRENT_SOURCE_DIR)
+    # Tests
+    set(LCOV_SOURCE_BASE_DIR "${CMAKE_SOURCE_DIR}")
+    set(LCOV_REMOVE_PATTERN "test/*.cpp")
+    include(testing)
+    add_subdirectory(test)
 
 
-# Doxygen target
-# Find all sources for documentation and stuff
-set(ALL_SOURCE_DIRECTORIES src include)
+    # Doxygen target
+    # Find all sources for documentation and stuff
+    set(ALL_SOURCE_DIRECTORIES src include)
 
-find_sources(ALL_SOURCES *.cpp *.hpp)
-set(DOXYGEN_FOUND ON)
-find_package(Doxygen QUIET)
-if(DOXYGEN_FOUND)
-    create_doxygen_target(doc)
-endif(DOXYGEN_FOUND)
+    find_sources(ALL_SOURCES *.cpp *.hpp)
+    set(DOXYGEN_FOUND ON)
+    find_package(Doxygen QUIET)
+    if(DOXYGEN_FOUND)
+        create_doxygen_target(doc)
+    endif(DOXYGEN_FOUND)
+endif()
