@@ -14,11 +14,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # CMake stuff
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 3.0)
 
 # Metadata
-project(MelanoLib CXX)
-set(PROJECT_VERSION 0.1)
+project(MelanoLib LANGUAGES CXX VERSION 0.1)
 
 # CMake modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -39,7 +38,7 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/include)
 add_subdirectory(src)
 
-if(CMAKE_SOURCE_DIR EQUAL CMAKE_CURRENT_SOURCE_DIR)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # Tests
     set(LCOV_SOURCE_BASE_DIR "${CMAKE_SOURCE_DIR}")
     set(LCOV_REMOVE_PATTERN "test/*.cpp")
