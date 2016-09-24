@@ -155,7 +155,7 @@ Inflector English::infl_imperate({
         {"say",                          "says"},
         {"don\'t",                       "doesn\'t"},
         {"(.*[bcdfghjklmnpqrstvwxyz]o)", "$1es"},
-        {"(.*(z|s|ch|sh|j|zh))",         "$1es"},
+        {"(.*(z|s|ch|sh|j|zh|x))",       "$1es"},
         {"(.*[bcdfghjklmnpqrstvwxyz])y", "$1ies"},
         {"(.+)",                         "$1s"},
     }, true);
