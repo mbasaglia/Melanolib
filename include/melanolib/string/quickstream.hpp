@@ -262,7 +262,7 @@ public:
             return {};
 
         match_type match;
-        if ( regex_match(regex,match,match_flags) )
+        if ( regex_match(regex, match, match_flags) )
         {
             pos += match.length();
             return match[0];
@@ -279,7 +279,7 @@ public:
                    std::regex_constants::match_flag_type match_flags =
                         std::regex_constants::match_default)
     {
-        if ( regex_match(regex,match,match_flags) )
+        if ( regex_match(regex, match, match_flags) )
         {
             pos += match.length();
             return true;

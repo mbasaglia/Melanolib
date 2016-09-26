@@ -37,7 +37,7 @@ template<class Scalar, class Comparator = math::compare_equals<Scalar>>
 
     constexpr Line() {}
     Line(const Point<Scalar, Comparator>& p1, Scalar length, Scalar angle)
-        : p1(p1), p2(PolarVector<Scalar>(length,angle).point()+p1) {}
+        : p1(p1), p2(PolarVector<Scalar>(length, angle).point()+p1) {}
     constexpr Line(const Point<Scalar, Comparator>& p1, const Point<Scalar, Comparator>& p2)
         : p1(p1), p2(p2) {}
 

@@ -60,8 +60,8 @@ public:
     constexpr DateTime(int32_t year, Month month, days day, hours hour, minutes minute,
              seconds second = seconds(0), milliseconds millisecond = milliseconds(0))
     : year_(year),
-      month_(melanolib::math::bound(Month::JANUARY,month,Month::DECEMBER)),
-      day_(melanolib::math::bound(1,day.count(),month_days(year,melanolib::math::bound(Month::JANUARY,month,Month::DECEMBER)))),
+      month_(melanolib::math::bound(Month::JANUARY, month, Month::DECEMBER)),
+      day_(melanolib::math::bound(1, day.count(), month_days(year, melanolib::math::bound(Month::JANUARY, month, Month::DECEMBER)))),
       hour_(hour.count() % 24),
       minute_(minute.count() % 60),
       second_(second.count() % 60),
@@ -118,11 +118,11 @@ public:
      */
     constexpr auto minute() const noexcept { return minute_; }
     /**
-     * \brief Hour of the day [0,23]
+     * \brief Hour of the day [0, 23]
      */
     constexpr auto hour() const noexcept { return hour_; }
     /**
-     * \brief Hour of the day [1,12]
+     * \brief Hour of the day [1, 12]
      */
     constexpr auto hour12() const noexcept { return hour_ % 12 ? hour_ % 12 : 12; }
     /**
@@ -134,11 +134,11 @@ public:
      */
     constexpr bool pm() const noexcept { return hour_ >= 12; }
     /**
-     * \brief Day of the month [1,31]
+     * \brief Day of the month [1, 31]
      */
     constexpr auto day() const noexcept { return day_; }
     /**
-     * \brief Day of the year [0,365]
+     * \brief Day of the year [0, 365]
      * \note Zero based
      */
     SUPER_CONSTEXPR int year_day() const noexcept
@@ -193,7 +193,7 @@ public:
      */
     constexpr int month_days(Month m) const noexcept
     {
-        return month_days(year_,m);
+        return month_days(year_, m);
     }
     /**
      * \brief Number of days in the given month
@@ -311,21 +311,21 @@ public:
         day_ = melanolib::math::bound(1, day, month_days(month_));
     }
     /**
-     * \brief Sets the hour of the day [0,23]
+     * \brief Sets the hour of the day [0, 23]
      */
     SUPER_CONSTEXPR void set_hour(uint8_t hour) noexcept
     {
         hour_ = hour % 24;
     }
     /**
-     * \brief Sets the minute of the hour [0,59]
+     * \brief Sets the minute of the hour [0, 59]
      */
     SUPER_CONSTEXPR void set_minute(uint8_t minute) noexcept
     {
         minute_ = minute % 60;
     }
     /**
-     * \brief Sets the second of the minute [0,59]
+     * \brief Sets the second of the minute [0, 59]
      * \note no leap seconds
      */
     SUPER_CONSTEXPR void set_second(uint8_t second) noexcept
@@ -333,7 +333,7 @@ public:
         second_ = second % 60;
     }
     /**
-     * \brief Sets the milliseconds of the second [0,999]
+     * \brief Sets the milliseconds of the second [0, 999]
      */
     SUPER_CONSTEXPR void set_millisecond(uint8_t milliseconds) noexcept
     {
@@ -346,11 +346,11 @@ public:
      * \brief Add a duration
      */
     template<class Rep, class Period>
-        DateTime& operator+= (const std::chrono::duration<Rep,Period>& dur) noexcept
+        DateTime& operator+= (const std::chrono::duration<Rep, Period>& dur) noexcept
         {
-            if ( dur < std::chrono::duration<Rep,Period>::zero() )
+            if ( dur < std::chrono::duration<Rep, Period>::zero() )
                 return *this -= -dur;
-            if ( dur == std::chrono::duration<Rep,Period>::zero() )
+            if ( dur == std::chrono::duration<Rep, Period>::zero() )
                 return *this;
 
             // adding a positive duration
@@ -359,10 +359,10 @@ public:
             decltype(ms) mask = 1;
 
             // add time
-            add_helper(1000,mask,ms,milliseconds_);
-            add_helper(60,mask,ms,second_);
-            add_helper(60,mask,ms,minute_);
-            add_helper(24,mask,ms,hour_);
+            add_helper(1000, mask, ms, milliseconds_);
+            add_helper(60, mask, ms, second_);
+            add_helper(60, mask, ms, minute_);
+            add_helper(24, mask, ms, hour_);
 
             // now the time has been added correctly, ms is rounded to the day
             // and the date needs to be adjusted
@@ -372,7 +372,7 @@ public:
             if ( d >= year_days(year_) - year_day() )
             {
                 d -= year_days(year_) - year_day();
-                set_date(year_+1,Month::JANUARY,days(1));
+                set_date(year_+1, Month::JANUARY, days(1));
             }
 
             // advance whole years
@@ -403,7 +403,7 @@ public:
         }
 
     template<class Rep, class Period>
-        SUPER_CONSTEXPR DateTime operator+ (const std::chrono::duration<Rep,Period>& dur) const noexcept
+        SUPER_CONSTEXPR DateTime operator+ (const std::chrono::duration<Rep, Period>& dur) const noexcept
         {
             auto t = *this;
             return t += dur;
@@ -414,11 +414,11 @@ public:
      * \tparam Duration a chrono duration
      */
     template<class Rep, class Period>
-        DateTime& operator-= (const std::chrono::duration<Rep,Period>& dur) noexcept
+        DateTime& operator-= (const std::chrono::duration<Rep, Period>& dur) noexcept
         {
-            if ( dur < std::chrono::duration<Rep,Period>::zero() )
+            if ( dur < std::chrono::duration<Rep, Period>::zero() )
                 return *this += -dur;
-            if ( dur == std::chrono::duration<Rep,Period>::zero() )
+            if ( dur == std::chrono::duration<Rep, Period>::zero() )
                 return *this;
 
             // subtracting a positive duration
@@ -426,10 +426,10 @@ public:
             decltype(ms) mask = 1;
 
             // subtract time
-            subtract_helper(1000,mask,ms,milliseconds_);
-            subtract_helper(60,mask,ms,second_);
-            subtract_helper(60,mask,ms,minute_);
-            subtract_helper(24,mask,ms,hour_);
+            subtract_helper(1000, mask, ms, milliseconds_);
+            subtract_helper(60, mask, ms, second_);
+            subtract_helper(60, mask, ms, minute_);
+            subtract_helper(24, mask, ms, hour_);
 
             // now the time has been subtracted correctly,
             // ms is rounded to the day and the date needs to be adjusted
@@ -439,7 +439,7 @@ public:
             if ( d > year_day() )
             {
                 d -= year_day() + 1;
-                set_date(year_-1,Month::DECEMBER,days(31));
+                set_date(year_-1, Month::DECEMBER, days(31));
             }
 
             // subtract whole years
@@ -470,7 +470,7 @@ public:
         }
 
     template<class Rep, class Period>
-        SUPER_CONSTEXPR DateTime operator- (const std::chrono::duration<Rep,Period>& dur) const noexcept
+        SUPER_CONSTEXPR DateTime operator- (const std::chrono::duration<Rep, Period>& dur) const noexcept
         {
             auto t = *this;
             return t -= dur;
@@ -560,11 +560,11 @@ public:
 private:
     int32_t    year_;          ///< Year
     Month      month_;         ///< Month
-    int8_t     day_;            ///< Day of the month [1,31]
-    int8_t     hour_;           ///< Hour [0,23]
-    int8_t     minute_;         ///< Minute [0,59]
-    int8_t     second_;         ///< Second [0,59] (no leap seconds)
-    int16_t    milliseconds_;   ///< Milli seconds [0,10^3)
+    int8_t     day_;            ///< Day of the month [1, 31]
+    int8_t     hour_;           ///< Hour [0, 23]
+    int8_t     minute_;         ///< Minute [0, 59]
+    int8_t     second_;         ///< Second [0, 59] (no leap seconds)
+    int16_t    milliseconds_;   ///< Milli seconds [0, 10^3)
 
     /**
      * \brief Helper function for operator-=()

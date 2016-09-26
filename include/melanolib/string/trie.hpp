@@ -86,7 +86,7 @@ private:
     {
         TrieNode* parent{nullptr};                      ///< Parent node
         bool marks_end{false};                          ///< Accepts the input
-        std::unordered_map<char,TrieNode*> children;    ///< Child nodes
+        std::unordered_map<char, TrieNode*> children;    ///< Child nodes
         int depth{0};                                   ///< Distance from the root
 
         TrieNode() : parent(nullptr), depth(0) {}
@@ -174,7 +174,7 @@ private:
          */
         void remove_child(TrieNode* child)
         {
-            auto it = std::find_if(children.begin(),children.end(),
+            auto it = std::find_if(children.begin(), children.end(),
                 [child](auto p) { return p.second == child; });
             if ( it != children.end() )
             {
@@ -362,7 +362,7 @@ public:
 
     BasicTrie& operator= (BasicTrie&& other) noexcept
     {
-        std::swap(root_,other.root_);
+        std::swap(root_, other.root_);
         return *this;
     }
 
@@ -526,7 +526,7 @@ public:
     template<class Functor>
     void recurse(const Functor& functor) const
     {
-        recurse(root_,functor,"");
+        recurse(root_, functor, "");
     }
 
 private:
@@ -578,7 +578,7 @@ private:
         {
             functor(iterator(node));
             for(const auto &pair : node->children)
-                recurse(pair.second,functor,prefix+pair.first);
+                recurse(pair.second, functor, prefix+pair.first);
         }
     }
 };
@@ -617,7 +617,7 @@ template<class AssocContainer, class = std::enable_if_t<std::is_convertible<type
         BasicTrie<typename AssocContainer::mapped_type> trie;
 
         for ( const auto& pair : container )
-            trie.insert(pair.first,pair.second);
+            trie.insert(pair.first, pair.second);
 
         return trie;
     }

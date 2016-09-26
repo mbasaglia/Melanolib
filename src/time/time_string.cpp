@@ -99,11 +99,11 @@ std::string month_shortname(Month month)
 melanolib::Optional<Month> month_from_name(const std::string& name)
 {
     for ( unsigned i = 0; i < month_names.size(); i++ )
-        if ( string::icase_equal(name,month_names[i]) )
+        if ( string::icase_equal(name, month_names[i]) )
             return Month(i+1);
 
     for ( unsigned i = 0; i < month_shortnames.size(); i++ )
-        if ( string::icase_equal(name,month_shortnames[i]) )
+        if ( string::icase_equal(name, month_shortnames[i]) )
             return Month(i+1);
     return {};
 }
@@ -132,11 +132,11 @@ std::string weekday_shortname(WeekDay day)
 melanolib::Optional<WeekDay> weekday_from_name(const std::string& name)
 {
     for ( unsigned i = 0; i < weekday_names.size(); i++ )
-        if ( string::icase_equal(name,weekday_names[i]) )
+        if ( string::icase_equal(name, weekday_names[i]) )
             return WeekDay(i+1);
 
     for ( unsigned i = 0; i < weekday_shortnames.size(); i++ )
-        if ( string::icase_equal(name,weekday_shortnames[i]) )
+        if ( string::icase_equal(name, weekday_shortnames[i]) )
             return WeekDay(i+1);
 
     return {};
@@ -150,7 +150,7 @@ std::string format_char(const DateTime& date_time, char c)
     {
     // Day
         case 'd':
-            return string::to_string(date_time.day(),2);
+            return string::to_string(date_time.day(), 2);
         case 'D':
             return weekday_shortname(date_time.week_day());
         case 'j':
@@ -172,7 +172,7 @@ std::string format_char(const DateTime& date_time, char c)
         case 'F':
             return month_name(date_time.month());
         case 'm':
-            return string::to_string(date_time.month_int(),2);
+            return string::to_string(date_time.month_int(), 2);
         case 'M':
             return month_shortname(date_time.month());
         case 'n':
@@ -187,7 +187,7 @@ std::string format_char(const DateTime& date_time, char c)
         case 'Y':
             return std::to_string(date_time.year()); /// \todo get only last 4 digits? Handle BC?
         case 'y':
-            return string::to_string(date_time.year() % 100,2);
+            return string::to_string(date_time.year() % 100, 2);
     // Time
         case 'a':
             return date_time.am() ? "am" : "pm";
@@ -200,15 +200,15 @@ std::string format_char(const DateTime& date_time, char c)
         case 'G':
             return std::to_string(date_time.hour());
         case 'h':
-            return string::to_string(date_time.hour12(),2);
+            return string::to_string(date_time.hour12(), 2);
         case 'H':
-            return string::to_string(date_time.hour(),2);
+            return string::to_string(date_time.hour(), 2);
         case 'i':
-            return string::to_string(date_time.minute(),2);
+            return string::to_string(date_time.minute(), 2);
         case 's':
-            return string::to_string(date_time.second(),2);
+            return string::to_string(date_time.second(), 2);
         case 'u':
-            return string::to_string(date_time.millisecond(),3)+"000";
+            return string::to_string(date_time.millisecond(), 3)+"000";
     // Timezone
         /// \todo Timezone(?)
         case 'e':
@@ -225,14 +225,14 @@ std::string format_char(const DateTime& date_time, char c)
             return "0";
     // Full Date/Time
         case 'c':
-            return format(date_time,"Y-m-d\\TH:i:s"); /// \todo timezone %P
+            return format(date_time, "Y-m-d\\TH:i:s"); /// \todo timezone %P
         case 'r':
-            return format(date_time,"D, d M Y H:i:s"); /// \todo timezone %O
+            return format(date_time, "D, d M Y H:i:s"); /// \todo timezone %O
         case 'U':
             return std::to_string(date_time.unix());
     // Default
         default:
-            return std::string(1,c);
+            return std::string(1, c);
     }
 }
 
@@ -245,7 +245,7 @@ std::string format(const DateTime& date_time, const std::string& fmt)
         if ( fmt[i] == '\\' && i+1 < fmt.size() )
             result += fmt[++i];
         else
-            result += format_char(date_time,fmt[i]);
+            result += format_char(date_time, fmt[i]);
     }
 
     return result;

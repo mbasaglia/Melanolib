@@ -51,7 +51,7 @@ std::string add_slashes ( const std::string& input, const std::string& character
  */
 inline std::string regex_escape( const std::string& input )
 {
-    return add_slashes(input,"^$\\.*+?()[]{}|");
+    return add_slashes(input, "^$\\.*+?()[]{}|");
 }
 
 /**
@@ -66,7 +66,7 @@ std::string replace(const std::string& input, const std::string& from, const std
  * \param prefix  (Optional) prefix to prepend to all terms
  */
 std::string replace(const std::string& subject,
-                    const std::unordered_map<std::string,std::string>& map,
+                    const std::unordered_map<std::string, std::string>& map,
                     const std::string& prefix = {});
 
 /**
@@ -84,8 +84,8 @@ std::string replace(const std::string& subject, const StringTrie& trie);
 inline bool simple_wildcard(const std::string& text, const std::string& pattern)
 {
     std::regex regex_pattern (
-        "^"+replace(add_slashes(pattern,"^$\\.+?()[]{}|"),"*",".*")+"$" );
-    return std::regex_match(text,regex_pattern);
+        "^"+replace(add_slashes(pattern, "^$\\.+?()[]{}|"), "*", ".*")+"$" );
+    return std::regex_match(text, regex_pattern);
 }
 
 /**
@@ -94,14 +94,14 @@ inline bool simple_wildcard(const std::string& text, const std::string& pattern)
  * \c * matches any sequence of characters, all other characters match themselves
  * \tparam Container A container of \c std::string
  */
-template <class Container, class = std::enable_if_t<!std::is_convertible<Container,std::string>::value>>
+template <class Container, class = std::enable_if_t<!std::is_convertible<Container, std::string>::value>>
     bool simple_wildcard(const Container& input, const std::string& pattern)
     {
-        static_assert(std::is_convertible<typename Container::value_type,std::string>::value,
+        static_assert(std::is_convertible<typename Container::value_type, std::string>::value,
             "simple_wildcard requires a string container"
         );
-        return std::any_of(input.begin(),input.end(),
-            [pattern](const std::string& t) { return simple_wildcard(t,pattern); });
+        return std::any_of(input.begin(), input.end(),
+            [pattern](const std::string& t) { return simple_wildcard(t, pattern); });
     }
 
 
@@ -130,12 +130,12 @@ std::vector<std::string> char_split(const std::string& input,
 /**
  * \brief Split a string of element separated by commas and spaces
  */
-inline std::vector<std::string> comma_split(const std::string& input,bool skip_empty = true)
+inline std::vector<std::string> comma_split(const std::string& input, bool skip_empty = true)
 {
     static std::regex regex_commaspace ( "(,\\s*)|(\\s+)",
         std::regex_constants::optimize |
         std::regex_constants::ECMAScript );
-    return string::regex_split(input,regex_commaspace,skip_empty);
+    return string::regex_split(input, regex_commaspace, skip_empty);
 }
 
 /**

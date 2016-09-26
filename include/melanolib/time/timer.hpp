@@ -155,7 +155,7 @@ template<class Clock>
             while ( active && repeating )
             {
                 std::unique_lock<std::mutex> lock(mutex);
-                condition.wait_until(lock,clock_type::now()+timeout,[this]{return !active;});
+                condition.wait_until(lock, clock_type::now()+timeout, [this]{return !active;});
                 if ( active )
                     action();
             }

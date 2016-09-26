@@ -23,7 +23,7 @@
 namespace melanolib {
 namespace string {
 
-Inflector::Inflector(const std::initializer_list<std::pair<std::string,std::string>>& rules, bool whole_words )
+Inflector::Inflector(const std::initializer_list<std::pair<std::string, std::string>>& rules, bool whole_words )
 {
     auto alter_regex = [whole_words](const std::string& re){
         return whole_words ? "\\b"+re+"\\b" : re;
@@ -129,7 +129,7 @@ std::string English::pluralize(int number, const std::string& noun) const
 
 std::string English::pluralize_with_number(int number, const std::string& noun) const
 {
-    return std::to_string(number) + " " + pluralize(number,noun);
+    return std::to_string(number) + " " + pluralize(number, noun);
 }
 
 std::string English::indefinite_article(const std::string& subject) const

@@ -36,7 +36,7 @@ public:
     using Byte = uint8_t;
 
     std::function<void(uint8_t)>                     callback_ascii;
-    std::function<void(uint32_t,const std::string&)> callback_utf8;
+    std::function<void(uint32_t, const std::string&)> callback_utf8;
     std::function<void(const std::string&)>          callback_invalid;
     std::function<void()>                            callback_end;
 

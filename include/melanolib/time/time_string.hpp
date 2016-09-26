@@ -73,11 +73,11 @@ std::string format_char(const DateTime& date_time, char c);
 std::string format(const DateTime& date_time, const std::string& fmt);
 
 /**
- * \brief Equivalent to format(DateTime(),fmt)
+ * \brief Equivalent to format(DateTime(), fmt)
  */
 inline std::string format(const std::string& fmt)
 {
-    return format(DateTime(),fmt);
+    return format(DateTime(), fmt);
 }
 
 /**
@@ -88,11 +88,11 @@ inline std::string format(const std::string& fmt)
 std::string strftime(const DateTime& date_time, const std::string& fmt);
 
 /**
- * \brief Equivalent to format(DateTime(),fmt)
+ * \brief Equivalent to format(DateTime(), fmt)
  */
 inline std::string strftime(const std::string& fmt)
 {
-    return strftime(DateTime(),fmt);
+    return strftime(DateTime(), fmt);
 }
 
 /**
@@ -126,8 +126,8 @@ template<class Rep, class Period>
     if ( dursec )
         durtext.push_back(english.pluralize_with_number(dursec, "week"));
 
-    std::reverse(durtext.begin(),durtext.end());
-    return string::implode(" ",durtext);
+    std::reverse(durtext.begin(), durtext.end());
+    return string::implode(" ", durtext);
 }
 
 template<class Rep, class Period>
@@ -137,14 +137,14 @@ template<class Rep, class Period>
     std::string durtext;
     using string::english;
 
-    durtext = string::to_string(dursec%60,2) + durtext;
+    durtext = string::to_string(dursec%60, 2) + durtext;
 
     dursec /= 60;
-    durtext = string::to_string(dursec%60,2) + ':' + durtext;
+    durtext = string::to_string(dursec%60, 2) + ':' + durtext;
 
     dursec /= 60;
     if ( dursec )
-        durtext = string::to_string(dursec%60,2) + ':' + durtext;
+        durtext = string::to_string(dursec%60, 2) + ':' + durtext;
 
     dursec /= 24;
     if ( dursec % 7 )

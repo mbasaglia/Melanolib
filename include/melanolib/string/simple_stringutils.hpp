@@ -98,7 +98,7 @@ inline bool ends_with(const std::string& haystack, const std::string& suffix)
  */
 inline std::string strtolower ( std::string string )
 {
-    std::transform(string.begin(),string.end(),string.begin(), ascii::to_lower);
+    std::transform(string.begin(), string.end(), string.begin(), ascii::to_lower);
     return string;
 }
 
@@ -107,7 +107,7 @@ inline std::string strtolower ( std::string string )
  */
 inline std::string strtoupper ( std::string string )
 {
-    std::transform(string.begin(),string.end(),string.begin(), ascii::to_upper);
+    std::transform(string.begin(), string.end(), string.begin(), ascii::to_upper);
     return string;
 }
 
@@ -128,7 +128,7 @@ inline unsigned long to_uint(const std::string& string,
                       unsigned long base = 10,
                       unsigned long default_value = 0) noexcept
 try {
-    return std::stoul(string,0,base);
+    return std::stoul(string, 0, base);
 } catch(const std::exception&) {
     return default_value;
 }
@@ -141,7 +141,7 @@ inline long to_int(const std::string& string,
             unsigned long base = 10,
             long default_value = 0) noexcept
 try {
-    return std::stol(string,0,base);
+    return std::stol(string, 0, base);
 } catch(const std::exception&) {
     return default_value;
 }
@@ -152,7 +152,7 @@ try {
  */
 inline bool is_one_of(const std::string& string, const std::initializer_list<std::string>& il )
 {
-    return std::find(il.begin(),il.end(),string) != il.end();
+    return std::find(il.begin(), il.end(), string) != il.end();
 }
 
 /**
@@ -169,7 +169,7 @@ inline bool icase_equal(const std::string& a, const std::string& b) noexcept
  *      \c digits digits
  */
 template<class T>
-    std::string to_string(T number,int digits=-1)
+    std::string to_string(T number, int digits=-1)
     {
         auto s = std::to_string(number);
         if ( int(s.size()) < digits )

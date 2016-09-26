@@ -34,7 +34,7 @@ template<class Scalar, class Comparator = math::compare_equals<Scalar>>
 
     Circle() {}
     Circle(Scalar x, Scalar y, Scalar radius = 0)
-        : origin(x,y), radius(radius){}
+        : origin(x, y), radius(radius){}
     Circle(const Point<Scalar, Comparator>& origin, Scalar radius = 0)
         : origin(origin), radius(radius){}
 

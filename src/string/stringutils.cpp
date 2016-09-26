@@ -48,8 +48,8 @@ std::string add_slashes ( const std::string& input, const std::string& character
     std::string::size_type prev = 0;
     while ( true )
     {
-        it = input.find_first_of(characters,it);
-        out.insert(out.size(),input,prev,it-prev);
+        it = input.find_first_of(characters, it);
+        out.insert(out.size(), input, prev, it-prev);
         if ( it == std::string::npos )
             break;
         out.push_back('\\');
@@ -71,8 +71,8 @@ std::string replace(const std::string& input, const std::string& from, const std
     std::string::size_type prev = 0;
     while ( true )
     {
-        it = input.find(from,it);
-        out.insert(out.size(),input,prev,it-prev);
+        it = input.find(from, it);
+        out.insert(out.size(), input, prev, it-prev);
         if ( it == std::string::npos )
             break;
         out += to;
@@ -108,9 +108,9 @@ std::vector<std::string> char_split(const std::string& input,
     auto begin = input.begin();
     while (true)
     {
-        auto next = std::find(begin, input.end(),separator);
+        auto next = std::find(begin, input.end(), separator);
         if ( !skip_empty || next > begin )
-            out.emplace_back(begin,next);
+            out.emplace_back(begin, next);
         if ( next == input.end() )
             break;
         begin = next+1;
@@ -136,8 +136,8 @@ std::string::size_type similarity(const std::string& s1, const std::string& s2)
     while ( i1 < s1.size() && i2 < s2.size() )
     {
         // find the where the first character of a string is found in the other
-        int_ next1 = s1.find(s2[i2],i1);
-        int_ next2 = s2.find(s1[i1],i2);
+        int_ next1 = s1.find(s2[i2], i1);
+        int_ next2 = s2.find(s1[i1], i2);
 
         // found: the character of s2 isn't too far in s1
         if ( next1 < next2 )
@@ -174,7 +174,7 @@ std::string::size_type similarity(const std::string& s1, const std::string& s2)
 }
 
 std::string replace(const std::string& subject,
-                    const std::unordered_map<std::string,std::string>& map,
+                    const std::unordered_map<std::string, std::string>& map,
                     const std::string& prefix)
 {
 

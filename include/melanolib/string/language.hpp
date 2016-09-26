@@ -54,7 +54,7 @@ public:
     Inflector(const std::initializer_list<Rule>& il)
         : rules(il) {}
 
-    Inflector(const std::initializer_list<std::pair<std::string,std::string>>& rules, bool whole_words);
+    Inflector(const std::initializer_list<std::pair<std::string, std::string>>& rules, bool whole_words);
 
     /**
      * \brief Inflects a phrase
@@ -66,7 +66,7 @@ public:
     {
         for ( const auto& regex : rules )
         {
-            phrase = std::regex_replace(phrase,regex.search,regex.replace);
+            phrase = std::regex_replace(phrase, regex.search, regex.replace);
         }
 
         return phrase;
@@ -84,7 +84,7 @@ public:
         for ( const auto& regex : rules )
         {
             if ( std::regex_match(phrase, regex.search) )
-                return std::regex_replace(phrase,regex.search,regex.replace);
+                return std::regex_replace(phrase, regex.search, regex.replace);
         }
 
         return phrase;

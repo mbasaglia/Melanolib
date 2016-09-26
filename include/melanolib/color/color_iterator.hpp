@@ -221,7 +221,7 @@ private:
 
 };
 
-template<class Range,class SizeFunc=ContainerSize<Range>>
+template<class Range, class SizeFunc=ContainerSize<Range>>
     constexpr ColorIterator<Range, SizeFunc>
     begin(const Range& range, const SizeFunc& size = {})
     {

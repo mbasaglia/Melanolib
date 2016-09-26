@@ -305,13 +305,13 @@ private:
         lexed += '-'+part2_lex;
 
         if ( month > Month::DECEMBER || month < Month::JANUARY ||
-            day < 1 || day > DateTime::month_days(year,month) )
+            day < 1 || day > DateTime::month_days(year, month) )
             return {};
 
 
         input.unget();
         DateTime date;
-        date.set_date(year,month,days(day));
+        date.set_date(year, month, days(day));
         return {Token::DATE, lexed, std::move(date)};
     }
 
@@ -361,11 +361,11 @@ private:
         else if ( std::isdigit(c) )
             return lex_number(c);
         else if ( c == '+' || c == '-' )
-            return {Token::OPERATOR, std::string(1,c)};
+            return {Token::OPERATOR, std::string(1, c)};
         else if ( c == '\'' || c == '"' ) // minute/second unit
-            return {Token::IDENTIFIER, std::string(1,c), std::string(1,c)};
+            return {Token::IDENTIFIER, std::string(1, c), std::string(1, c)};
 
-        return {Token::INVALID, std::string(1,c)};
+        return {Token::INVALID, std::string(1, c)};
     }
     /**
      * \brief Reads the next token into \c lookahead
@@ -399,18 +399,18 @@ private:
     template <class DurationT>
         static bool is_unit(const std::string& str)
         {
-            if ( std::is_same<DurationT,weeks>::value )
-                return string::is_one_of(str,{"week","weeks","w","W"});
-            if ( std::is_same<DurationT,days>::value )
-                return string::is_one_of(str,{"day","days","d","D"});
-            if ( std::is_same<DurationT,hours>::value )
-                return string::is_one_of(str,{"hours","hour","h","H"});
-            if ( std::is_same<DurationT,minutes>::value )
-                return string::is_one_of(str,{"minutes","minute","m","min","'","M"});
-            if ( std::is_same<DurationT,seconds>::value )
-                return string::is_one_of(str,{"seconds","second","s","\"","S"});
-            if ( std::is_same<DurationT,milliseconds>::value )
-                return string::is_one_of(str,{"milliseconds","millisecond","ms"});
+            if ( std::is_same<DurationT, weeks>::value )
+                return string::is_one_of(str, {"week", "weeks", "w", "W"});
+            if ( std::is_same<DurationT, days>::value )
+                return string::is_one_of(str, {"day", "days", "d", "D"});
+            if ( std::is_same<DurationT, hours>::value )
+                return string::is_one_of(str, {"hours", "hour", "h", "H"});
+            if ( std::is_same<DurationT, minutes>::value )
+                return string::is_one_of(str, {"minutes", "minute", "m", "min", "'", "M"});
+            if ( std::is_same<DurationT, seconds>::value )
+                return string::is_one_of(str, {"seconds", "second", "s", "\"", "S"});
+            if ( std::is_same<DurationT, milliseconds>::value )
+                return string::is_one_of(str, {"milliseconds", "millisecond", "ms"});
             return false;
         }
 
@@ -601,7 +601,7 @@ private:
             scan();
         }
 
-        date.set_date(year,month,days(day));
+        date.set_date(year, month, days(day));
         return date;
     }
 
@@ -638,7 +638,7 @@ private:
             day = n;
             scan();
             if ( lookahead.type == Token::IDENTIFIER &&
-                    string::is_one_of(token_val<std::string>(),{"th","st","nd","rd"}) )
+                    string::is_one_of(token_val<std::string>(), {"th", "st", "nd", "rd"}) )
                 scan();
         }
     }
@@ -692,7 +692,7 @@ private:
         scan();
         apply_am_pm(hour);
 
-        out.set_time(hour,mins,second,millisecond);
+        out.set_time(hour, mins, second, millisecond);
     }
 
     void apply_am_pm(hours& hour)

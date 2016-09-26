@@ -83,7 +83,7 @@ template<class Scalar, class Comparator = math::compare_equals<Scalar>>
     }
     constexpr Point operator- (const Point&p) const
     {
-        return Point(x-p.x,y-p.y);
+        return Point(x-p.x, y-p.y);
     }
     constexpr Point operator* (Scalar factor) const
     {

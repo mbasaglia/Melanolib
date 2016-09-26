@@ -44,7 +44,7 @@ template<class Scalar, class Comparator = math::compare_equals<Scalar>>
     constexpr Rectangle() {}
 
     constexpr Rectangle(Scalar x, Scalar y, Scalar width, Scalar height )
-        : x(x),y(y),width(width),height(height) {}
+        : x(x), y(y), width(width), height(height) {}
 
     constexpr Rectangle( const Point<Scalar, Comparator>& pos, const Size<Scalar, Comparator>& size )
         : x(pos.x), y(pos.y), width(size.width), height(size.height) {}
@@ -57,14 +57,14 @@ template<class Scalar, class Comparator = math::compare_equals<Scalar>>
     constexpr Scalar right() const { return x+width; }
     constexpr Scalar bottom() const { return y+height; }
 
-    constexpr Point<Scalar, Comparator> top_left() const { return Point<Scalar, Comparator>(left(),top()); }
-    constexpr Point<Scalar, Comparator> bottom_right() const { return Point<Scalar, Comparator>(right(),bottom()); }
-    constexpr Point<Scalar, Comparator> top_right() const { return Point<Scalar, Comparator>(right(),top()); }
-    constexpr Point<Scalar, Comparator> bottom_left() const { return Point<Scalar, Comparator>(left(),bottom()); }
-    constexpr Point<Scalar, Comparator> center() const { return Point<Scalar, Comparator>(x+width/2,y+height/2); }
+    constexpr Point<Scalar, Comparator> top_left() const { return Point<Scalar, Comparator>(left(), top()); }
+    constexpr Point<Scalar, Comparator> bottom_right() const { return Point<Scalar, Comparator>(right(), bottom()); }
+    constexpr Point<Scalar, Comparator> top_right() const { return Point<Scalar, Comparator>(right(), top()); }
+    constexpr Point<Scalar, Comparator> bottom_left() const { return Point<Scalar, Comparator>(left(), bottom()); }
+    constexpr Point<Scalar, Comparator> center() const { return Point<Scalar, Comparator>(x+width/2, y+height/2); }
 
     constexpr Scalar area() const { return width*height; }
-    constexpr Size<Scalar, Comparator> size() const { return Size<Scalar, Comparator>(width,height); }
+    constexpr Size<Scalar, Comparator> size() const { return Size<Scalar, Comparator>(width, height); }
 
     /**
      * \brief Get whether a rectangle contains the given point
@@ -78,7 +78,7 @@ template<class Scalar, class Comparator = math::compare_equals<Scalar>>
      */
     constexpr bool contains(Scalar x, Scalar y) const
     {
-        return contains(Point<Scalar, Comparator>(x,y));
+        return contains(Point<Scalar, Comparator>(x, y));
     }
 
     /**
@@ -102,7 +102,7 @@ template<class Scalar, class Comparator = math::compare_equals<Scalar>>
      */
     SUPER_CONSTEXPR void translate(Scalar dx, Scalar dy)
     {
-        translate(Point<Scalar, Comparator>(dx,dy));
+        translate(Point<Scalar, Comparator>(dx, dy));
     }
 
     /**
@@ -110,14 +110,14 @@ template<class Scalar, class Comparator = math::compare_equals<Scalar>>
      */
     constexpr Rectangle translated(const Point<Scalar, Comparator>& offset) const
     {
-        return Rectangle(top_left()+offset,size());
+        return Rectangle(top_left()+offset, size());
     }
     /**
      * \brief Get a rectangle moved by the given amount
      */
     constexpr Rectangle translated(Scalar dx, Scalar dy) const
     {
-        return translated(Point<Scalar, Comparator>(dx,dy));
+        return translated(Point<Scalar, Comparator>(dx, dy));
     }
 
     /**
@@ -246,7 +246,7 @@ template<class Scalar, class Comparator = math::compare_equals<Scalar>>
      */
     Rectangle expanded(Scalar margin) const
     {
-        return Rectangle(x-margin,y-margin,width+2*margin,height+2*margin);
+        return Rectangle(x-margin, y-margin, width+2*margin, height+2*margin);
     }
 };
 

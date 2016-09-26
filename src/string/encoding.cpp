@@ -83,7 +83,7 @@ void Utf8Parser::parse(const std::string& string)
         if ( byte < 0b1000'0000 )
         {
             check_valid();
-            melanolib::callback(callback_ascii,byte);
+            melanolib::callback(callback_ascii, byte);
         }
         // 11.. .... => Begin multibyte
         else if ( (byte & 0b1100'0000) == 0b1100'0000 )
@@ -110,7 +110,7 @@ void Utf8Parser::parse(const std::string& string)
             unicode |= byte&0b0011'1111; //'
             if ( utf8.size() == length )
             {
-                melanolib::callback(callback_utf8,unicode,utf8);
+                melanolib::callback(callback_utf8, unicode, utf8);
                 unicode = 0;
                 length = 0;
                 utf8.clear();
@@ -124,7 +124,7 @@ void Utf8Parser::parse(const std::string& string)
 std::string Utf8Parser::encode(uint32_t value)
 {
     if ( value < 128 )
-        return std::string(1,char(value));
+        return std::string(1, char(value));
 
     std::basic_string<uint8_t> s;
 
@@ -146,7 +146,7 @@ std::string Utf8Parser::encode(uint32_t value)
 
     s.back() |= head << (8 - s.size());
 
-    return std::string(s.rbegin(),s.rend());
+    return std::string(s.rbegin(), s.rend());
 }
 
 void Utf8Parser::check_valid()
@@ -154,7 +154,7 @@ void Utf8Parser::check_valid()
     if ( length != 0 )
     {
         // premature end of a multi-byte character
-        melanolib::callback(callback_invalid,utf8);
+        melanolib::callback(callback_invalid, utf8);
         length = 0;
         utf8.clear();
         unicode = 0;
