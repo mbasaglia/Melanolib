@@ -41,7 +41,10 @@ public:
     void close()
     {
         if ( handle )
+        {
             dlclose(handle);
+            handle = nullptr;
+        }
     }
 
     void open(LoadFlags flags)
