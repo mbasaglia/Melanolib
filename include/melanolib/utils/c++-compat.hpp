@@ -89,6 +89,23 @@
 #     error "Missing <any>"
 #  endif
 
+// variant
+#if MELANOLIB_HAS_INCLUDE(<variant>)
+#    include<variant>
+    namespace melanolib {
+        template<class T>
+            using Variant = std::variant<T>;
+    } // namespace melanolib
+#  elif MELANOLIB_HAS_INCLUDE(<boost/variant.hpp>)
+#    include <boost/variant.hpp>
+    namespace melanolib {
+        template<class T>
+            using Variant = boost::variant<T>;
+    } // namespace melanolib
+#  else
+#     error "Missing <variant>"
+#  endif
+
 #include <memory>
 
 namespace melanolib {
