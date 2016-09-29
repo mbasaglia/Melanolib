@@ -32,6 +32,7 @@ namespace string {
 
 static bool setup_iconv()
 {
+    // With the C locale, //TRANSLIT won't work properly
     static const char* const only_once = setlocale (LC_ALL, "");
     return only_once && only_once[0] != 'C';
 }
@@ -56,7 +57,6 @@ char Utf8Parser::to_ascii(const std::string& utf8)
 {
 #ifdef HAS_ICONV
     setup_iconv();
-    // With the C locale, //TRANSLIT won't work properly
     char ascii = '?';
     char * cutf8 = (char*)utf8.data();
     size_t cutf8size = utf8.size();
@@ -72,96 +72,73 @@ char Utf8Parser::to_ascii(const std::string& utf8)
 #endif
 }
 
-void Utf8Parser::parse(const std::string& string)
+Utf8Parser::Utf8Parser(const std::string& string)
+    : input(string)
 {
-    input.str(string);
-    while ( !input.eof() )
-    {
-        uint8_t byte = input.next();
-
-        // 0... .... => ASCII
-        if ( byte_type(byte) == ByteType::ASCII )
-        {
-            check_valid();
-            melanolib::callback(callback_ascii, byte);
-        }
-        // 11.. .... => Begin multibyte
-        else if ( byte_type(byte) == ByteType::MultiHead )
-        {
-            check_valid();
-            utf8.push_back(byte);
-            std::tie(length, unicode) = head_length_value(byte);
-        }
-        // 10.. .... => multibyte tail
-        else if ( length > 0 )
-        {
-            utf8.push_back(byte);
-            unicode <<= 6;
-            unicode |= tail_value(byte);
-            if ( utf8.size() == length )
-            {
-                melanolib::callback(callback_utf8, unicode, utf8);
-                unicode = 0;
-                length = 0;
-                utf8.clear();
-            }
-        }
-    }
-    check_valid();
-    melanolib::callback(callback_end);
-}
-
-void Utf8Parser::start_parsing(const std::string& string)
-{
-    input.str(string);
 }
 
 Unicode Utf8Parser::next()
 {
-    uint8_t byte = input.next();
-
-    if ( finished() )
-        return Unicode("", 0);
-
-    if ( byte_type(byte) == ByteType::ASCII )
+    while ( !input.eof() )
     {
-        return Unicode(std::string(1, byte), byte);
-    }
-    else if ( byte_type(byte) == ByteType::MultiHead )
-    {
-        std::string utf8;
-        uint32_t unicode = 0;
-        unsigned length = 0;
+        Byte byte = input.next();
 
-        utf8.push_back(byte);
-
-        std::tie(length, unicode) = head_length_value(byte);
-
-        while ( utf8.size() < length )
+        if ( byte_type(byte) == ByteType::ASCII )
         {
-            byte = input.next();
-
-            if ( !input )
-                return Unicode("", 0);
-
-            if ( byte_type(byte) != ByteType::MultiTail )
-            {
-                input.unget();
-                return next();
-            }
+            return Unicode(std::string(1, byte), byte);
+        }
+        else if ( byte_type(byte) == ByteType::MultiHead )
+        {
+            std::string utf8;
+            uint32_t unicode = 0;
+            unsigned length = 0;
 
             utf8.push_back(byte);
-            unicode <<= 6;
-            unicode |= tail_value(byte);
-        }
-        return Unicode(utf8, unicode);
 
+            std::tie(length, unicode) = head_length_value(byte);
+
+            while ( utf8.size() < length )
+            {
+                byte = input.next();
+
+                if ( !input )
+                    return Unicode("", 0);
+
+                if ( byte_type(byte) != ByteType::MultiTail )
+                {
+                    input.unget();
+                    return next();
+                }
+
+                utf8.push_back(byte);
+                unicode <<= 6;
+                unicode |= tail_value(byte);
+            }
+            return Unicode(utf8, unicode);
+
+        }
     }
-    else
+    return Unicode("", 0);
+}
+
+QuickStream::traits_type::int_type Utf8Parser::next_ascii(bool skip_utf8)
+{
+    while ( true )
     {
-        while ( input && byte_type(byte) == ByteType::MultiTail )
-           byte = input.next();
-        return next();
+        Byte byte = input.next();
+
+        if ( finished() )
+            return QuickStream::traits_type::eof();
+
+        if ( byte_type(byte) == ByteType::ASCII )
+        {
+            return byte;
+        }
+        else if ( !skip_utf8 && byte_type(byte) == ByteType::MultiHead )
+        {
+            input.unget();
+            return byte;
+        }
     }
 }
 
@@ -170,18 +147,18 @@ std::string Utf8Parser::encode(uint32_t value)
     if ( value < 128 )
         return std::string(1, char(value));
 
-    std::basic_string<uint8_t> s;
+    std::basic_string<Byte> s;
 
-    uint8_t head = 0;
+    Byte head = 0;
     while ( value )
     {
-        s.push_back((value&0b0011'1111)|0b1000'0000);
+        s.push_back(tail_value(value) | leading_bit);
         value >>= 6;
         head <<= 1;
         head |= 1;
     }
 
-    if ( (uint8_t(s.back())&0b0011'1111) > (1 << (7 - s.size())) )
+    if ( tail_value(s.back()) > (1 << (7 - s.size())) )
     {
         head <<= 1;
         head |= 1;
@@ -193,21 +170,9 @@ std::string Utf8Parser::encode(uint32_t value)
     return std::string(s.rbegin(), s.rend());
 }
 
-void Utf8Parser::check_valid()
-{
-    if ( length != 0 )
-    {
-        // premature end of a multi-byte character
-        melanolib::callback(callback_invalid, utf8);
-        length = 0;
-        utf8.clear();
-        unicode = 0;
-    }
-}
-
-
 Unicode::Unicode(uint32_t point)
     : utf8_(Utf8Parser::encode(point)), point_(point)
 {}
+
 } // namespace string
 } // namespace melanolib

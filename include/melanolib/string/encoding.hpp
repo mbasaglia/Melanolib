@@ -64,34 +64,32 @@ class Utf8Parser
 public:
     using Byte = uint8_t;
 
-    std::function<void(uint8_t)>                     callback_ascii;
-    std::function<void(uint32_t, const std::string&)>callback_utf8;
-    std::function<void(const std::string&)>          callback_invalid;
-    std::function<void()>                            callback_end;
-
     melanolib::string::QuickStream input;
 
     /**
-     * \brief Parse the string completely, calling the right callbacks
+     * \brief Start parsing
      */
-    void parse(const std::string& string);
+    Utf8Parser(const std::string& string);
 
     /**
      * \brief Whether the end of the string has been reached
      */
-    bool finished() const { return !input; }
-
-
-    /**
-     * \brief Start manual parsing
-     */
-    void start_parsing(const std::string& string);
+    bool finished() const { return !input || input.eof(); }
 
     /**
      * \brief Get the next unicode point
      * \pre !finished()
      */
     Unicode next();
+
+    /**
+     * \brief Get the nex ascii byte
+     * \pre !finished()
+     * \param skip_utf8 If \b true, skips valid utf-8 sequences.
+     *                  If \b false, returns the head of utf-8 sequences
+     *                  without extracting them (so you can then call next())
+     */
+    QuickStream::int_type next_ascii(bool skip_utf8 = false);
 
     /**
      * \brief Encode a unicode value to UTF-8
@@ -125,14 +123,7 @@ private:
         MultiTail,
     };
 
-    std::string           utf8;         ///< Multibyte string
-    uint32_t              unicode;      ///< Multibyte value
-    unsigned              length = 0;   ///< Multibyte length
-
-    /**
-     * \brief Handles an invalid/incomplete sequence
-     */
-    void check_valid();
+    static constexpr uint8_t leading_bit = 1 << 7;
 
     static constexpr ByteType byte_type(uint8_t byte)
     {
@@ -153,7 +144,7 @@ private:
     {
         unsigned length = 0;
         // extract number of leading 1s
-        while ( byte & 0b1000'0000 )
+        while ( byte & leading_bit )
         {
             length++;
             byte <<= 1;
