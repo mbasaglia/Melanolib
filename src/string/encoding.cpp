@@ -80,34 +80,24 @@ void Utf8Parser::parse(const std::string& string)
         uint8_t byte = input.next();
 
         // 0... .... => ASCII
-        if ( byte < 0b1000'0000 )
+        if ( byte_type(byte) == ByteType::ASCII )
         {
             check_valid();
             melanolib::callback(callback_ascii, byte);
         }
         // 11.. .... => Begin multibyte
-        else if ( (byte & 0b1100'0000) == 0b1100'0000 )
+        else if ( byte_type(byte) == ByteType::MultiHead )
         {
             check_valid();
             utf8.push_back(byte);
-
-            // extract number of leading 1s
-            while ( byte & 0b1000'0000 )
-            {
-                length++;
-                byte <<= 1;
-            }
-
-            // Restore byte (leading 1s have been eaten off)
-            byte >>= length;
-            unicode = byte;
+            std::tie(length, unicode) = head_length_value(byte);
         }
         // 10.. .... => multibyte tail
         else if ( length > 0 )
         {
             utf8.push_back(byte);
             unicode <<= 6;
-            unicode |= byte&0b0011'1111; //'
+            unicode |= tail_value(byte);
             if ( utf8.size() == length )
             {
                 melanolib::callback(callback_utf8, unicode, utf8);
@@ -119,6 +109,60 @@ void Utf8Parser::parse(const std::string& string)
     }
     check_valid();
     melanolib::callback(callback_end);
+}
+
+void Utf8Parser::start_parsing(const std::string& string)
+{
+    input.str(string);
+}
+
+Unicode Utf8Parser::next()
+{
+    uint8_t byte = input.next();
+
+    if ( finished() )
+        return Unicode("", 0);
+
+    if ( byte_type(byte) == ByteType::ASCII )
+    {
+        return Unicode(std::string(1, byte), byte);
+    }
+    else if ( byte_type(byte) == ByteType::MultiHead )
+    {
+        std::string utf8;
+        uint32_t unicode = 0;
+        unsigned length = 0;
+
+        utf8.push_back(byte);
+
+        std::tie(length, unicode) = head_length_value(byte);
+
+        while ( utf8.size() < length )
+        {
+            byte = input.next();
+
+            if ( !input )
+                return Unicode("", 0);
+
+            if ( byte_type(byte) != ByteType::MultiTail )
+            {
+                input.unget();
+                return next();
+            }
+
+            utf8.push_back(byte);
+            unicode <<= 6;
+            unicode |= tail_value(byte);
+        }
+        return Unicode(utf8, unicode);
+
+    }
+    else
+    {
+        while ( input && byte_type(byte) == ByteType::MultiTail )
+           byte = input.next();
+        return next();
+    }
 }
 
 std::string Utf8Parser::encode(uint32_t value)
@@ -161,5 +205,9 @@ void Utf8Parser::check_valid()
     }
 }
 
+
+Unicode::Unicode(uint32_t point)
+    : utf8_(Utf8Parser::encode(point)), point_(point)
+{}
 } // namespace string
 } // namespace melanolib
