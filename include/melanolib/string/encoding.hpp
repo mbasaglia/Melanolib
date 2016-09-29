@@ -74,7 +74,7 @@ public:
     /**
      * \brief Whether the end of the string has been reached
      */
-    bool finished() const { return !input || input.eof(); }
+    bool finished() const { return input.eof(); }
 
     /**
      * \brief Get the next unicode point

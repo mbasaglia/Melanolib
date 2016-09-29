@@ -123,12 +123,9 @@ Unicode Utf8Parser::next()
 
 QuickStream::traits_type::int_type Utf8Parser::next_ascii(bool skip_utf8)
 {
-    while ( true )
+    while ( !input.eof() )
     {
         Byte byte = input.next();
-
-        if ( finished() )
-            return QuickStream::traits_type::eof();
 
         if ( byte_type(byte) == ByteType::ASCII )
         {
@@ -140,6 +137,7 @@ QuickStream::traits_type::int_type Utf8Parser::next_ascii(bool skip_utf8)
             return byte;
         }
     }
+    return QuickStream::traits_type::eof();
 }
 
 std::string Utf8Parser::encode(uint32_t value)
