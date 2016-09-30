@@ -93,14 +93,16 @@
 #if MELANOLIB_HAS_INCLUDE(<variant>)
 #    include<variant>
     namespace melanolib {
-        template<class T>
-            using Variant = std::variant<T>;
+        template<class... T>
+            using Variant = std::variant<T...>;
+        using std::get;
     } // namespace melanolib
 #  elif MELANOLIB_HAS_INCLUDE(<boost/variant.hpp>)
 #    include <boost/variant.hpp>
     namespace melanolib {
-        template<class T>
-            using Variant = boost::variant<T>;
+        template<class... T>
+            using Variant = boost::variant<T...>;
+        using boost::get;
     } // namespace melanolib
 #  else
 #     error "Missing <variant>"
