@@ -180,6 +180,12 @@ struct ExplicitlyConvertible : public std::is_constructible<Target, Source>
 {
 };
 
+/**
+ * \brief SFINAE-friendly type checker
+ */
+template<class Type, class...Args>
+    using DummyType = Type;
+
 
 } // namespace melanolib
 #endif // MELANOLIB_TYPE_UTILS_HPP
