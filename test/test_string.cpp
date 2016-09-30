@@ -440,3 +440,15 @@ BOOST_AUTO_TEST_CASE( test_slug )
     BOOST_CHECK ( string::slug("pony princess") == "pony_princess" );
     BOOST_CHECK ( string::slug("Pony") == "pony" );
 }
+
+BOOST_AUTO_TEST_CASE( test_QuickStream_get_while )
+{
+    using string::QuickStream;
+
+    QuickStream qs("foo123bar456xyz");
+    BOOST_CHECK_EQUAL( qs.get_while(string::ascii::is_alpha, false), "foo" );
+    BOOST_CHECK_EQUAL( qs.get_until(string::ascii::is_alpha, false), "123" );
+    BOOST_CHECK_EQUAL( qs.get_while(string::ascii::is_alpha), "bar" );
+    BOOST_CHECK_EQUAL( qs.get_until(string::ascii::is_alpha), "56" );
+    BOOST_CHECK_EQUAL( qs.get_while(string::ascii::is_alpha), "yz" );
+}

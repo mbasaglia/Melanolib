@@ -215,12 +215,25 @@ public:
      * \tparam Predicate    A predicate taking chars
      * \param predicate     Termination condition
      * \param skip_match    If \c true, it will skip the first character for which \p predicate is \c true
+     * \todo use std::not_fn
      */
     template<class Predicate>
         string_type get_until(const Predicate& predicate, bool skip_match = true)
     {
+        return get_while([&predicate](char c){return !predicate(c);}, skip_match);
+    }
+
+    /**
+     * \brief Get a string, until \p predicate is false (or eof)
+     * \tparam Predicate    A predicate taking chars
+     * \param predicate     Termination condition
+     * \param skip_match    If \c true, it will skip the first character for which \p predicate is \c false
+     */
+    template<class Predicate>
+        string_type get_while(const Predicate& predicate, bool skip_match = true)
+    {
         auto begin = pos;
-        while ( !eof() && !predicate(source[pos]) )
+        while ( !eof() && predicate(source[pos]) )
             pos++;
         auto end = pos-begin;
         if ( !eof() && skip_match )
