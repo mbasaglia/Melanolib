@@ -71,6 +71,12 @@ namespace wrapper {
          */
         virtual Object get_child(const std::string& name) const = 0;
 
+        /**
+         * \brief Calls a child function
+         * \throws MemberNotFound or TypeError
+         */
+        virtual Object call_method(const std::string& name, const std::vector<Object>& args) = 0;
+
     private:
         const TypeWrapper* _type;
     };
@@ -84,6 +90,18 @@ class MemberNotFound : std::runtime_error
 public:
     explicit MemberNotFound(const std::string& message)
         : runtime_error(message)
+    {}
+};
+
+
+/**
+ * \brief Exception thrown when passing bad parameters to a function
+ */
+class FunctionError : std::invalid_argument
+{
+public:
+    explicit FunctionError(const std::string& message)
+        : invalid_argument(message)
     {}
 };
 
@@ -106,6 +124,7 @@ class Object
 public:
     using MemberPath = std::vector<std::string>;
     using MemberPathIterator = MemberPath::const_iterator;
+    using Arguments = std::vector<Object>;
 
     explicit Object(std::shared_ptr<wrapper::ValueWrapper> value)
         : value(std::move(value))
@@ -126,6 +145,24 @@ public:
     Object get(const MemberPath path) const
     {
         return get(path.begin(), path.end());
+    }
+
+    /**
+     * \brief Invokes a member function
+     * \throws MemberNotFound or TypeError
+     */
+    Object call(const std::string& method, const Arguments& args) const
+    {
+        return value->call_method(method, args);
+    }
+
+    /**
+     * \brief Invokes as a function
+     * \throws MemberNotFound or TypeError
+     */
+    Object invoke(const Arguments& args) const
+    {
+        return call({}, args);
     }
 
     /**
@@ -166,6 +203,11 @@ template<class T>
     {}
 
     const T& get() const
+    {
+        return value;
+    }
+
+    T& get()
     {
         return value;
     }
@@ -222,6 +264,12 @@ namespace wrapper {
         template<class HeldType>
             using UnregGetter = std::function<Object(const HeldType&, const std::string& name)>;
 
+        template<class HeldType>
+            using Method = std::function<Object(HeldType&, const Object::Arguments&)>;
+
+        template<class HeldType>
+            using MethodMap = std::unordered_map<std::string, Method<HeldType>>;
+
     } // namespace detail
 
     /**
@@ -248,6 +296,7 @@ namespace wrapper {
         template<class T>
             ClassWrapper& add_readonly(const std::string& name, const T& value);
 
+
         /**
          * \brief Sets a fallback functions used to get additional unregistered
          *        attributes
@@ -259,6 +308,31 @@ namespace wrapper {
         template<class T>
             ClassWrapper& fallback_getter(const T& functor);
 
+        /**
+         * \brief Exposes a member function
+         * \tparam T can be:
+         * * A pointer to a function member of HeldType
+         * * Any function object, the first argument must be a reference to HeldType
+         *   (Either const or not)
+         */
+        template<class T>
+            ClassWrapper& add_method(const std::string& name, const T& value);
+
+        /**
+         * \brief Allows class objects to act as a functions
+         * \tparam T can be:
+         * * A pointer to a function member of HeldType
+         * * Any function object, the first argument must be one of the following:
+         *      * const HeldType&
+         *      * HeldType&
+         *      * HeldType
+         */
+        template<class T>
+            ClassWrapper& make_callable(const T& value)
+            {
+                return add_method("", value);
+            }
+
         const std::type_info& type_info() const noexcept override
         {
             return typeid(HeldType);
@@ -269,7 +343,7 @@ namespace wrapper {
          * \throws MemberNotFound if \p name is not something registered
          * with one of the add_readonly() overloads
          */
-        Object get_child(const HeldType& owner, const std::string& attrname) const
+        Object get_value(const HeldType& owner, const std::string& attrname) const
         {
             auto iter = getters.find(attrname);
             if ( iter == getters.end() )
@@ -281,9 +355,28 @@ namespace wrapper {
             return iter->second(owner);
         }
 
+        /**
+         * \brief Returns an attribute of the passed object
+         * \throws MemberNotFound if \p name is not something registered
+         * with one of the add_readonly() overloads
+         */
+        Object call_method(
+            HeldType& owner,
+            const std::string& method,
+            const Object::Arguments& attributes) const
+        {
+            auto iter = methods.find(method);
+            if ( iter == methods.end() )
+            {
+                throw MemberNotFound("\"" + method + "\" is not a member function of " + name());
+            }
+            return iter->second(owner, attributes);
+        }
+
     private:
         detail::GetterMap<HeldType> getters;
         detail::UnregGetter<HeldType> _fallback_getter;
+        detail::MethodMap<HeldType> methods;
     };
 
 } // namespace wrapper
@@ -349,7 +442,7 @@ namespace wrapper {
 
         Object get_child(const std::string& name) const override
         {
-            return class_wrapper().get_child(value.get(), name);
+            return class_wrapper().get_value(value.get(), name);
         }
 
         const ClassWrapper<Class>& class_wrapper() const
@@ -360,6 +453,11 @@ namespace wrapper {
         const Class& get() const
         {
             return value.get();
+        }
+
+        Object call_method(const std::string& name, const std::vector<Object>& args) override
+        {
+            return class_wrapper().call_method(value.get(), name, args);
         }
 
     private:
@@ -404,11 +502,21 @@ public:
     template<class Class>
     Object object(const Class& value) const
     {
+        return object<Class, const Class&>(value);
+    }
+
+    /**
+     * \brief Creates an object wrapper around the value
+     * \throws TypeError if \p Class has not been registered with register_class
+     */
+    template<class Class, class... Args>
+    Object object(Args&&... args) const
+    {
         auto iter = classes.find(typeid(Class));
         if ( iter == classes.end() )
             throw TypeError("Unregister type");
         return Object(std::make_shared<wrapper::ObjectWrapper<Class>>(
-            value,
+            std::forward<Args>(args)...,
             static_cast<wrapper::ClassWrapper<Class>*>(iter->second.get())
         ));
     }
@@ -569,6 +677,267 @@ namespace wrapper {
                 };
             }
 
+        /**
+         * \brief Dummy class to a get compile-time sequence of indices from a parameter pack
+         * \tparam Indices Sequence if indices from 0 to sizeof...(Indices)
+         */
+        template <int... Indices>
+            struct IndexPack {};
+
+        /**
+         * \brief Dummy class that builds an integer pack from a single integer
+         * \tparam N The number which needs to be converted to a pack
+         * \tparam Indices Pack of indices for \c IndexPack, starts out empty
+         *
+         * It expands \p N recursively into an int pack, the last recursive
+         * class inherits IndexPack, which only has the int pack as template
+         * parameter.
+         */
+        template <int N, int... Indices>
+            struct IndexPackBuilder : IndexPackBuilder<N-1, N-1, Indices...> {};
+
+        /**
+        * \brief Termination for \c IndexPackBuilder
+        */
+        template <int... Indices>
+            struct IndexPackBuilder<0, Indices...> : IndexPack<Indices...> {};
+
+
+        /**
+         * \brief Dummy function to build an index pack for the parameters of a pointer to member function
+         */
+        template <class Class, class Ret, class... Args>
+        constexpr int count_args(Ret(Class::*)(Args...) const){ return sizeof...(Args); }
+        template <class Class, class Ret, class... Args>
+        constexpr int count_args(Ret(Class::*)(Args...)){ return sizeof...(Args); }
+
+
+        namespace function {
+            /** Const, member function
+             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
+             * \tparam Class        Class for the member function
+             * \tparam Ret          Return type
+             * \tparam Args         Function parameter types
+             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
+             */
+            template<class Class, class Ret, class... Args, int... Indices>
+            Ret call_helper(
+                Ret(Class::*func)(Args...) const,
+                Class& object,
+                const Object::Arguments& args,
+                IndexPack<Indices...>)
+            {
+                if ( args.size() != sizeof...(Args) )
+                    throw FunctionError("Wrong number of arguments");
+                return (object.*func)(args[Indices].cast<Args>()...);
+            }
+
+            /** Const, member function
+             * \brief Exposes a memeber function as a method of the class
+             */
+            template<class HeldType, class Ret, class... Args>
+            Method<HeldType> wrap_functor(
+                const ClassWrapper<HeldType>* type,
+                const std::string& name,
+                Ret (HeldType::*pointer)(Args...) const)
+            {
+                return [type, pointer](HeldType& value, const Object::Arguments& args) {
+                    return type->parent_namespace().object(
+                        call_helper(pointer, value, args, IndexPackBuilder<sizeof...(Args)>{})
+                    );
+                };
+            }
+
+
+            /** Const, function pointer
+             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
+             * \tparam Class        Class for the member function
+             * \tparam Ret          Return type
+             * \tparam Args         Function parameter types
+             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
+             */
+            template<class Class, class Ret, class... Args, int... Indices>
+            Ret call_helper(
+                Ret(*func)(const Class&, Args...),
+                Class& object,
+                const Object::Arguments& args,
+                IndexPack<Indices...>)
+            {
+                if ( args.size() != sizeof...(Args) )
+                    throw FunctionError("Wrong number of arguments");
+                return func(object, args[Indices].cast<Args>()...);
+            }
+
+            /** Const, function pointer
+             * \brief Exposes a memeber function as a method of the class
+             */
+            template<class HeldType, class Ret, class... Args>
+            Method<HeldType> wrap_functor(
+                const ClassWrapper<HeldType>* type,
+                const std::string& name,
+                Ret (*pointer)(const HeldType&, Args...))
+            {
+                return [type, pointer](HeldType& value, const Object::Arguments& args) {
+                    return type->parent_namespace().object(
+                        call_helper(pointer, value, args, IndexPackBuilder<sizeof...(Args)>{})
+                    );
+                };
+            }
+
+            /** Mutable, member function
+             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
+             * \tparam Class        Class for the member function
+             * \tparam Ret          Return type
+             * \tparam Args         Function parameter types
+             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
+             */
+            template<class Class, class Ret, class... Args, int... Indices>
+            Ret call_helper(
+                Ret(Class::*func)(Args...),
+                Class& object,
+                const Object::Arguments& args,
+                IndexPack<Indices...>)
+            {
+                if ( args.size() != sizeof...(Args) )
+                    throw FunctionError("Wrong number of arguments");
+                return (object.*func)(args[Indices].cast<Args>()...);
+            }
+
+            /** Mutable, member function
+             * \brief Exposes a memeber function as a method of the class
+             */
+            template<class HeldType, class Ret, class... Args>
+            Method<HeldType> wrap_functor(
+                const ClassWrapper<HeldType>* type,
+                const std::string& name,
+                Ret (HeldType::*pointer)(Args...))
+            {
+                return [type, pointer](HeldType& value, const Object::Arguments& args) {
+                    return type->parent_namespace().object(
+                        call_helper(pointer, value, args, IndexPackBuilder<sizeof...(Args)>{})
+                    );
+                };
+            }
+
+            /** Const, function object
+             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
+             * \tparam Class        Class for the member function
+             * \tparam Functor      Functor type
+             * \tparam Ret          Return type
+             * \tparam Args         Function parameter types
+             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
+             */
+            template<class Class, class Functor, class Ret, class... Args, int... Indices>
+            Ret call_helper(
+                Functor functor,
+                Class& object,
+                const Object::Arguments& args,
+                Ret(Functor::*)(const Class& object, Args...) const,
+                IndexPack<Indices...>)
+            {
+                if ( args.size() != sizeof...(Args) )
+                    throw FunctionError("Wrong number of arguments");
+                return functor(object, args[Indices].cast<Args>()...);
+            }
+
+            /** Const, function object (by value)
+             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
+             * \tparam Class        Class for the member function
+             * \tparam Functor      Functor type
+             * \tparam Ret          Return type
+             * \tparam Args         Function parameter types
+             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
+             */
+            template<class Class, class Functor, class Ret, class... Args, int... Indices>
+            Ret call_helper(
+                Functor functor,
+                Class& object,
+                const Object::Arguments& args,
+                Ret(Functor::*)(Class, Args...) const,
+                IndexPack<Indices...>)
+            {
+                if ( args.size() != sizeof...(Args) )
+                    throw FunctionError("Wrong number of arguments");
+                return functor(object, args[Indices].cast<Args>()...);
+            }
+
+            /** Mutable, function object
+             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
+             * \tparam Class        Class for the member function
+             * \tparam Functor      Functor type
+             * \tparam Ret          Return type
+             * \tparam Args         Function parameter types
+             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
+             */
+            template<class Class, class Functor, class Ret, class... Args, int... Indices>
+            Ret call_helper(
+                Functor functor,
+                Class& object,
+                const Object::Arguments& args,
+                Ret(Functor::*)(Class& object, Args...) const,
+                IndexPack<Indices...>)
+            {
+                if ( args.size() != sizeof...(Args) )
+                    throw FunctionError("Wrong number of arguments");
+                return functor(object, args[Indices].cast<Args>()...);
+            }
+
+            /** Const/Mutable, function object
+             * \brief Exposes a memeber function as a method of the class
+             */
+            template<class HeldType, class Functor>
+            Method<HeldType> wrap_functor(
+                const ClassWrapper<HeldType>* type,
+                const std::string& name,
+                const Functor& functor)
+            {
+                return [type, functor](HeldType& value, const Object::Arguments& args) {
+                    return type->parent_namespace().object(
+                        call_helper(
+                            functor, value, args, &Functor::operator(),
+                            IndexPackBuilder<count_args(&Functor::operator())-1>()
+                        )
+                    );
+                };
+            }
+
+            /** Mutable, function pointer
+             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
+             * \tparam Class        Class for the member function
+             * \tparam Ret          Return type
+             * \tparam Args         Function parameter types
+             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
+             */
+            template<class Class, class Ret, class... Args, int... Indices>
+            Ret call_helper(
+                Ret(*func)(Class&, Args...),
+                Class& object,
+                const Object::Arguments& args,
+                IndexPack<Indices...>)
+            {
+                if ( args.size() != sizeof...(Args) )
+                    throw FunctionError("Wrong number of arguments");
+                return func(object, args[Indices].cast<Args>()...);
+            }
+
+            /** Mutable, function pointer
+             * \brief Exposes a memeber function as a method of the class
+             */
+            template<class HeldType, class Ret, class... Args>
+            Method<HeldType> wrap_functor(
+                const ClassWrapper<HeldType>* type,
+                const std::string& name,
+                Ret (*pointer)(HeldType&, Args...))
+            {
+                return [type, pointer](HeldType& value, const Object::Arguments& args) {
+                    return type->parent_namespace().object(
+                        call_helper(pointer, value, args, IndexPackBuilder<sizeof...(Args)>{})
+                    );
+                };
+            }
+
+        } // namespace function
+
     } // namespace detail
 
     template<class Class>
@@ -587,23 +956,37 @@ namespace wrapper {
             _fallback_getter = detail::unreg_getter<HeldType>(this, functor);
             return *this;
         }
+
+    template<class Class>
+    template<class T>
+        ClassWrapper<Class>& ClassWrapper<Class>::add_method(const std::string& name, const T& value)
+        {
+            /// \todo Could keep const-correctness
+            using namespace detail::function;
+            methods[name] = wrap_functor<HeldType>(this, name, value);
+            return *this;
+        }
 } // namespace wrapper
 
 template<class T>
 const T& Object::cast() const
 {
-    if ( auto ptr = dynamic_cast<wrapper::ObjectWrapper<T>*>(value.get()) )
+    /// \todo Allow binding references
+    using Type = std::decay_t<T>;
+    if ( auto ptr = dynamic_cast<wrapper::ObjectWrapper<Type>*>(value.get()) )
         return ptr->get();
     throw TypeError(
         "Object is of type " + value->type().name() + ", not "
-        + value->type().parent_namespace().type_name<T>()
+        + value->type().parent_namespace().type_name<Type>()
     );
 }
 
 template<class T>
 bool Object::has_type() const
 {
-    return dynamic_cast<wrapper::ObjectWrapper<T>*>(value.get());
+    /// \todo Allow binding references
+    using Type = std::decay_t<T>;
+    return dynamic_cast<wrapper::ObjectWrapper<Type>*>(value.get());
 }
 
 

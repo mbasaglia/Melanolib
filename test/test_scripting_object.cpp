@@ -203,4 +203,123 @@ BOOST_AUTO_TEST_CASE( test_has_type )
     BOOST_CHECK( !ns.object(123).has_type<double>() );
 }
 
+struct SomeClassWithMethods
+{
+    std::string data = "data";
 
+    std::string method_noargs() const
+    {
+        return "-" + data;
+    }
+
+    std::string method_arg(const std::string& arg) const
+    {
+        return "-" + arg + data;
+    }
+
+    std::string method_noconst()
+    {
+        return "+" + data;
+    }
+
+};
+
+BOOST_AUTO_TEST_CASE( test_method_access_method )
+{
+    Namespace ns;
+    ns.register_type<SomeClassWithMethods>()
+        .add_readonly("data", &SomeClassWithMethods::data)
+        .add_method("method_noargs", &SomeClassWithMethods::method_noargs)
+        .add_method("method_arg", &SomeClassWithMethods::method_arg)
+        .add_method("method_noconst", &SomeClassWithMethods::method_noconst)
+    ;
+    ns.register_type<std::string>();
+
+    Object object = ns.object(SomeClassWithMethods());
+    BOOST_CHECK_EQUAL( object.get({"data"}).to_string(), "data" );
+
+    BOOST_CHECK_EQUAL( object.call("method_noargs", {}).to_string(), "-data");
+    BOOST_CHECK_THROW( object.call("method_arg", {}).to_string(), FunctionError);
+    BOOST_CHECK_EQUAL( object.call("method_noconst", {}).to_string(), "+data");
+    Object arg = ns.object<std::string>("foo");
+    BOOST_CHECK_THROW( object.call("method_noargs", {arg}).to_string(), FunctionError);
+    BOOST_CHECK_EQUAL( object.call("method_arg", {arg}).to_string(), "-foodata");
+
+}
+
+std::string function_const(const SomeClass& obj, const std::string& arg)
+{
+    return obj.data_member + arg;
+}
+
+BOOST_AUTO_TEST_CASE( test_method_access_functor_object_const )
+{
+    Namespace ns;
+    ns.register_type<SomeClass>()
+        .add_method("lambda_noargs", [](const SomeClass& obj) {
+            return obj.data_member;
+        })
+        .add_method("lambda_arg", [](const SomeClass& obj, const std::string& arg) {
+            return arg + obj.data_member;
+        })
+        .add_method("fnptr", &function_const)
+        .add_method("lambda_copy", [](SomeClass obj) {
+            return obj.data_member;
+        })
+    ;
+    ns.register_type<std::string>();
+
+    Object object = ns.object(SomeClass());
+    BOOST_CHECK_EQUAL( object.call("lambda_noargs", {}).to_string(), "data member");
+    BOOST_CHECK_THROW( object.call("lambda_arg", {}).to_string(), FunctionError);
+    BOOST_CHECK_EQUAL( object.call("lambda_copy", {}).to_string(), "data member");
+    Object arg = ns.object<std::string>("foo");
+    BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), FunctionError);
+    BOOST_CHECK_EQUAL( object.call("lambda_arg", {arg}).to_string(), "foodata member");
+    BOOST_CHECK_EQUAL( object.call("fnptr", {arg}).to_string(), "data memberfoo");
+
+}
+
+std::string function_noconst(SomeClass& obj, const std::string& arg)
+{
+    return obj.data_member + arg;
+}
+
+BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noconst )
+{
+    Namespace ns;
+    ns.register_type<SomeClass>()
+        .add_method("lambda_noargs", [](SomeClass& obj) {
+            return obj.data_member;
+        })
+        .add_method("lambda_arg", [](SomeClass& obj, const std::string& arg) {
+            return arg + obj.data_member;
+        })
+        .add_method("fnptr", &function_noconst)
+    ;
+    ns.register_type<std::string>();
+
+    Object object = ns.object(SomeClass());
+    BOOST_CHECK_EQUAL( object.call("lambda_noargs", {}).to_string(), "data member");
+    BOOST_CHECK_THROW( object.call("lambda_arg", {}).to_string(), FunctionError);
+    Object arg = ns.object<std::string>("foo");
+    BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), FunctionError);
+    BOOST_CHECK_EQUAL( object.call("lambda_arg", {arg}).to_string(), "foodata member");
+    BOOST_CHECK_EQUAL( object.call("fnptr", {arg}).to_string(), "data memberfoo");
+}
+
+BOOST_AUTO_TEST_CASE( test_callable )
+{
+    /// \todo Overloads to pass by value
+    Namespace ns;
+    ns.register_type<int>()
+        .make_callable([](int i) {
+            return i * 10;
+        })
+    ;
+    ns.register_type<float>();
+
+    BOOST_CHECK_EQUAL( ns.object(2).invoke({}).to_string(), "20");
+    BOOST_CHECK_THROW( ns.object(2.f).invoke({}).to_string(), MemberNotFound);
+
+}
