@@ -23,6 +23,7 @@
 
 #include <vector>
 #include <typeinfo>
+#include <typeindex>
 #include <unordered_map>
 #include <memory>
 #include <sstream>
@@ -407,26 +408,7 @@ public:
     }
 
 private:
-    using TypeInfo = std::reference_wrapper<const std::type_info>;
-
-    struct TypeHasher
-    {
-        std::size_t operator()(TypeInfo info) const
-        {
-            return info.get().hash_code();
-        }
-    };
-
-    struct TypeEqualTo
-    {
-        bool operator()(TypeInfo lhs, TypeInfo rhs) const
-        {
-            return lhs.get() == rhs.get();
-        }
-    };
-
-    std::unordered_map<TypeInfo, std::unique_ptr<wrapper::TypeWrapper>,
-                       TypeHasher, TypeEqualTo> classes;
+    std::unordered_map<std::type_index, std::unique_ptr<wrapper::TypeWrapper>> classes;
 };
 
 namespace wrapper {
