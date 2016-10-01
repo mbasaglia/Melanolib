@@ -95,8 +95,14 @@ BOOST_AUTO_TEST_CASE( test_class_not_found )
 BOOST_AUTO_TEST_CASE( test_builtin )
 {
     Namespace ns;
-    ns.register_type<int>("int");
+    ns.register_type<int>();
 
     BOOST_CHECK_EQUAL( ns.object(123).to_string(), "123" );
 }
 
+BOOST_AUTO_TEST_CASE( test_register_type_name )
+{
+    Namespace ns;
+    BOOST_CHECK_EQUAL( ns.register_type<int>().name(), typeid(int).name() );
+    BOOST_CHECK_EQUAL( ns.register_type<float>("real").name(), "real" );
+}

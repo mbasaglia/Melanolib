@@ -328,16 +328,26 @@ class Namespace
 {
 public:
     /**
-     * \brief Registers a class
+     * \brief Registers a type
      * \returns The registered class wrapper
      */
-    template<class Class>
-        wrapper::ClassWrapper<Class>& register_type(const std::string& name)
+    template<class Type>
+        wrapper::ClassWrapper<Type>& register_type(const std::string& name)
     {
-        auto ptr = std::make_unique<wrapper::ClassWrapper<Class>>(name, this);
+        auto ptr = std::make_unique<wrapper::ClassWrapper<Type>>(name, this);
         auto& ref = *ptr;
         classes[ptr->type_info()] = std::move(ptr);
         return ref;
+    }
+
+    /**
+     * \brief Registers a type using a default name
+     * \returns The registered class wrapper
+     */
+    template<class Type>
+        wrapper::ClassWrapper<Type>& register_type()
+    {
+        return register_type<Type>(typeid(Type).name());
     }
 
     /**
