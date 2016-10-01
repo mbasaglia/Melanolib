@@ -748,42 +748,6 @@ namespace wrapper {
                 };
             }
 
-
-            /** Const, function pointer
-             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
-             * \tparam Class        Class for the member function
-             * \tparam Ret          Return type
-             * \tparam Args         Function parameter types
-             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
-             */
-            template<class Class, class Ret, class... Args, int... Indices>
-            Ret call_helper(
-                Ret(*func)(const Class&, Args...),
-                Class& object,
-                const Object::Arguments& args,
-                IndexPack<Indices...>)
-            {
-                if ( args.size() != sizeof...(Args) )
-                    throw FunctionError("Wrong number of arguments");
-                return func(object, args[Indices].cast<Args>()...);
-            }
-
-            /** Const, function pointer
-             * \brief Exposes a memeber function as a method of the class
-             */
-            template<class HeldType, class Ret, class... Args>
-            Method<HeldType> wrap_functor(
-                const ClassWrapper<HeldType>* type,
-                const std::string& name,
-                Ret (*pointer)(const HeldType&, Args...))
-            {
-                return [type, pointer](HeldType& value, const Object::Arguments& args) {
-                    return type->parent_namespace().object(
-                        call_helper(pointer, value, args, IndexPackBuilder<sizeof...(Args)>{})
-                    );
-                };
-            }
-
             /** Mutable, member function
              * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
              * \tparam Class        Class for the member function
@@ -819,7 +783,7 @@ namespace wrapper {
                 };
             }
 
-            /** Const, function object
+            /** Const/Mutable, function object/pointer
              * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
              * \tparam Class        Class for the member function
              * \tparam Functor      Functor type
@@ -828,11 +792,11 @@ namespace wrapper {
              * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
              */
             template<class Class, class Functor, class Ret, class... Args, int... Indices>
-            Ret call_helper(
+            Ret call_helper_functor(
                 Functor functor,
                 Class& object,
                 const Object::Arguments& args,
-                Ret(Functor::*)(const Class& object, Args...) const,
+                DummyTuple<Args...>,
                 IndexPack<Indices...>)
             {
                 if ( args.size() != sizeof...(Args) )
@@ -840,49 +804,7 @@ namespace wrapper {
                 return functor(object, args[Indices].cast<Args>()...);
             }
 
-            /** Const, function object (by value)
-             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
-             * \tparam Class        Class for the member function
-             * \tparam Functor      Functor type
-             * \tparam Ret          Return type
-             * \tparam Args         Function parameter types
-             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
-             */
-            template<class Class, class Functor, class Ret, class... Args, int... Indices>
-            Ret call_helper(
-                Functor functor,
-                Class& object,
-                const Object::Arguments& args,
-                Ret(Functor::*)(Class, Args...) const,
-                IndexPack<Indices...>)
-            {
-                if ( args.size() != sizeof...(Args) )
-                    throw FunctionError("Wrong number of arguments");
-                return functor(object, args[Indices].cast<Args>()...);
-            }
-
-            /** Mutable, function object
-             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
-             * \tparam Class        Class for the member function
-             * \tparam Functor      Functor type
-             * \tparam Ret          Return type
-             * \tparam Args         Function parameter types
-             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
-             */
-            template<class Class, class Functor, class Ret, class... Args, int... Indices>
-            Ret call_helper(
-                Functor functor,
-                Class& object,
-                const Object::Arguments& args,
-                Ret(Functor::*)(Class& object, Args...) const,
-                IndexPack<Indices...>)
-            {
-                if ( args.size() != sizeof...(Args) )
-                    throw FunctionError("Wrong number of arguments");
-                return functor(object, args[Indices].cast<Args>()...);
-            }
-
-            /** Const/Mutable, function object
+            /** Const/Mutable, function object/pointer
              * \brief Exposes a memeber function as a method of the class
              */
             template<class HeldType, class Functor>
@@ -892,46 +814,13 @@ namespace wrapper {
                 const Functor& functor)
             {
                 return [type, functor](HeldType& value, const Object::Arguments& args) {
+                    using Sig = FunctionSignature<Functor>;
                     return type->parent_namespace().object(
-                        call_helper(
-                            functor, value, args, &Functor::operator(),
-                            IndexPackBuilder<count_args(&Functor::operator())-1>()
+                        call_helper_functor<HeldType, Functor, typename Sig::return_type>(
+                            functor, value, args,
+                            typename Sig::argument_types_tag::tail(),
+                            IndexPackBuilder<Sig::argument_count-1>()
                         )
-                    );
-                };
-            }
-
-            /** Mutable, function pointer
-             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
-             * \tparam Class        Class for the member function
-             * \tparam Ret          Return type
-             * \tparam Args         Function parameter types
-             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
-             */
-            template<class Class, class Ret, class... Args, int... Indices>
-            Ret call_helper(
-                Ret(*func)(Class&, Args...),
-                Class& object,
-                const Object::Arguments& args,
-                IndexPack<Indices...>)
-            {
-                if ( args.size() != sizeof...(Args) )
-                    throw FunctionError("Wrong number of arguments");
-                return func(object, args[Indices].cast<Args>()...);
-            }
-
-            /** Mutable, function pointer
-             * \brief Exposes a memeber function as a method of the class
-             */
-            template<class HeldType, class Ret, class... Args>
-            Method<HeldType> wrap_functor(
-                const ClassWrapper<HeldType>* type,
-                const std::string& name,
-                Ret (*pointer)(HeldType&, Args...))
-            {
-                return [type, pointer](HeldType& value, const Object::Arguments& args) {
-                    return type->parent_namespace().object(
-                        call_helper(pointer, value, args, IndexPackBuilder<sizeof...(Args)>{})
                     );
                 };
             }

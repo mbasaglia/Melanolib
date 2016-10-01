@@ -27,6 +27,22 @@
 
 namespace melanolib {
 
+
+template<class... Args>
+    struct DummyTuple;
+
+template<class Head, class... Args>
+    struct DummyTuple<Head, Args...> : DummyTuple<Args...>
+    {
+        using head = Head;
+        using tail = DummyTuple<Args...>;
+    };
+
+template<>
+    struct DummyTuple<>
+    {
+    };
+
 /**
  * \brief Template to retrieve information about a function signature
  *
@@ -41,11 +57,52 @@ template<class Ret, class...Args>
         using pointer_type = Ret (*) (Args...);
         using return_type = Ret;
         using arguments_types = std::tuple<Args...>;
+        using argument_types_tag = DummyTuple<Args...>;
+        static constexpr auto argument_count = sizeof...(Args);
     };
 
 template<class Ret, class...Args>
     struct FunctionSignature<Ret(*)(Args...)>
         : public FunctionSignature<Ret(Args...)>
+    {
+    };
+
+
+/**
+ * \brief Template to retrieve information about a function signature
+ *
+ * Use as MemberFunctionSignature<Pointer>
+ */
+template<class T>
+    struct MemberFunctionSignature;
+
+
+template<class Class, class Ret, class...Args>
+    struct MemberFunctionSignature<Ret(Class::*)(Args...) const>
+
+    {
+        using pointer_type = Ret (Class::*) (Args...) const;
+        using return_type = Ret;
+        using arguments_types = std::tuple<Args...>;
+        using argument_types_tag = DummyTuple<Args...>;
+        static constexpr auto argument_count = sizeof...(Args);
+        static constexpr bool is_const = true;
+    };
+
+template<class Class, class Ret, class...Args>
+    struct MemberFunctionSignature<Ret(Class::*)(Args...)>
+    {
+        using pointer_type = Ret (Class::*) (Args...) const;
+        using return_type = Ret;
+        using arguments_types = std::tuple<Args...>;
+        using argument_types_tag = DummyTuple<Args...>;
+        static constexpr auto argument_count = sizeof...(Args);
+        static constexpr bool is_const = false;
+    };
+
+template<class Class>
+    struct FunctionSignature
+        : public MemberFunctionSignature<decltype(&Class::operator())>
     {
     };
 
