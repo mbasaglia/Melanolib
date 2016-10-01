@@ -207,80 +207,12 @@ namespace wrapper {
         using HeldType = Class;
 
         ClassWrapper(std::string name, Namespace* parent_namespace)
-            : TypeWrapper(std::move(name)), parent_namespace(parent_namespace)
+            : TypeWrapper(std::move(name)),
+            _parent_namespace(parent_namespace)
         {}
 
-        /**
-         * \brief Exposes a data memeber as an attribute of this class
-         */
         template<class T>
-            ClassWrapper& add(const std::string& name, T HeldType::* pointer)
-            {
-                getters[name] = [this, pointer](const HeldType& value) {
-                    T x = value.*pointer;
-                    return make_object(value.*pointer);
-                };
-                return *this;
-            }
-
-        /**
-         * \brief Exposes a memeber function as an attribute of this class
-         */
-        template<class T>
-            ClassWrapper& add(const std::string& name, T (HeldType::*pointer)() const)
-            {
-                getters[name] = [this, pointer](const HeldType& value) {
-                    return make_object((value.*pointer)());
-                };
-                return *this;
-            }
-
-        /**
-         * \brief Exposes an arbitraty functon (taking a const reference to the class)
-         * as an attribute of this class
-         */
-        template<class Functor>
-            std::enable_if_t<
-                IsCallableAnyReturn<Functor, const HeldType&>::value,
-                ClassWrapper&
-            > add(const std::string& name, const Functor& functor)
-            {
-                getters[name] = [this, functor](const HeldType& value) {
-                    return make_object(functor(value));
-                };
-                return *this;
-            }
-
-        /**
-         * \brief Exposes an arbitraty functon (taking no arguments)
-         * as an attribute of this class
-         */
-        template<class Functor>
-            std::enable_if_t<
-                IsCallableAnyReturn<Functor>::value,
-                ClassWrapper&
-            > add(const std::string& name, const Functor& functor)
-            {
-                getters[name] = [this, functor](const HeldType&) {
-                    return make_object(functor());
-                };
-                return *this;
-            }
-
-        /**
-         * \brief Exposes a constant as an attribute of this class
-         */
-        template<class T>
-            std::enable_if_t<
-                !IsCallableAnyReturn<T>::value && ! IsCallableAnyReturn<T, const HeldType&>::value,
-                ClassWrapper&
-            > add(const std::string& name, T value)
-            {
-                getters[name] = [this, value](const HeldType&) {
-                    return make_object(value);
-                };
-                return *this;
-            }
+            ClassWrapper& add(const std::string& name, const T& value);
 
         const std::type_info& type_info() const noexcept override
         {
@@ -300,16 +232,16 @@ namespace wrapper {
             return iter->second(owner);
         }
 
+        const Namespace& parent_namespace() const
+        {
+            return *_parent_namespace;
+        }
+
     private:
-        /**
-         * \brief Calls object() on the parent namespace
-         */
-        template<class T>
-            Object make_object(const T& value) const;
 
         using Getter = std::function<Object(const HeldType&)>;
         std::unordered_map<std::string, Getter> getters;
-        Namespace* parent_namespace;
+        Namespace* _parent_namespace;
     };
 
 } // namespace wrapper
@@ -397,10 +329,10 @@ class Namespace
 public:
     /**
      * \brief Registers a class
-     * \returns The registered class
+     * \returns The registered class wrapper
      */
     template<class Class>
-        wrapper::ClassWrapper<Class>& register_class(const std::string& name)
+        wrapper::ClassWrapper<Class>& register_type(const std::string& name)
     {
         auto ptr = std::make_unique<wrapper::ClassWrapper<Class>>(name, this);
         auto& ref = *ptr;
@@ -453,12 +385,100 @@ private:
 };
 
 namespace wrapper {
+
+    namespace detail {
+        template<class HeldType>
+            using Getter = std::function<Object(const HeldType&)>;
+
+        template<class HeldType>
+            using GetterMap = std::unordered_map<std::string, Getter<HeldType>>;
+
+        /**
+         * \brief Exposes a data memeber as an attribute of this class
+         */
+        template<class HeldType, class T>
+            void register_read(GetterMap<HeldType>& getters,
+                               const ClassWrapper<HeldType>* object,
+                               const std::string& name,
+                               T HeldType::* pointer)
+            {
+                getters[name] = [object, pointer](const HeldType& value) {
+                    return object->parent_namespace().object(value.*pointer);
+                };
+            }
+
+        /**
+         * \brief Exposes a memeber function as an attribute of this class
+         */
+        template<class HeldType, class T>
+            void register_read(GetterMap<HeldType>& getters,
+                               const ClassWrapper<HeldType>* object,
+                               const std::string& name,
+                               T (HeldType::*pointer)() const)
+            {
+                getters[name] = [object, pointer](const HeldType& value) {
+                    return object->parent_namespace().object((value.*pointer)());
+                };
+            }
+
+        /**
+         * \brief Exposes an arbitraty functon (taking a const reference to the class)
+         * as an attribute of this class
+         */
+        template<class HeldType, class Functor>
+            std::enable_if_t<IsCallableAnyReturn<Functor, const HeldType&>::value>
+            register_read(GetterMap<HeldType>& getters,
+                          const ClassWrapper<HeldType>* object,
+                          const std::string& name,
+                          const Functor& functor)
+            {
+                getters[name] = [object, functor](const HeldType& value) {
+                    return object->parent_namespace().object(functor(value));
+                };
+            }
+
+        /**
+         * \brief Exposes an arbitraty functon (taking no arguments)
+         * as an attribute of this class
+         */
+        template<class HeldType, class Functor>
+            std::enable_if_t<IsCallableAnyReturn<Functor>::value>
+            register_read(GetterMap<HeldType>& getters,
+                          const ClassWrapper<HeldType>* object,
+                          const std::string& name,
+                          const Functor& functor)
+            {
+                getters[name] = [object, functor](const HeldType&) {
+                    return object->parent_namespace().object(functor());
+                };
+            }
+
+        /**
+         * \brief Exposes a fixed value as an attribute of this class
+         */
+        template<class HeldType, class T>
+            std::enable_if_t<
+                !IsCallableAnyReturn<T, const HeldType&>::value &&
+                !IsCallableAnyReturn<T>::value>
+            register_read(GetterMap<HeldType>& getters,
+                          const ClassWrapper<HeldType>* object,
+                          const std::string& name,
+                          const T& value)
+            {
+                getters[name] = [object, value](const HeldType&) {
+                    return object->parent_namespace().object(value);
+                };
+            }
+
+    } // namespace detail
+
     template<class Class>
     template<class T>
-    Object ClassWrapper<Class>::make_object(const T& value) const
-    {
-        return parent_namespace->object(value);
-    }
+        ClassWrapper<Class>& ClassWrapper<Class>::add(const std::string& name, const T& value)
+        {
+            detail::register_read<HeldType>(getters, this, name, value);
+            return *this;
+        }
 } // namespace wrapper
 
 } // namespace scripting

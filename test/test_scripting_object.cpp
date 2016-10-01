@@ -48,11 +48,11 @@ public:
 BOOST_AUTO_TEST_CASE( test_to_string )
 {
     Namespace ns;
-    ns.register_class<SomeClass>("SomeClass")
+    ns.register_type<SomeClass>("SomeClass")
         .add("data", &SomeClass::data_member)
         .add("method", &SomeClass::member_function)
     ;
-    ns.register_class<std::string>("string");
+    ns.register_type<std::string>("string");
 
     BOOST_CHECK_EQUAL( ns.object(std::string("foo")).to_string(), "foo" );
     BOOST_CHECK_EQUAL( ns.object(SomeClass()).to_string(), "SomeClass" );
@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE( test_to_string )
 BOOST_AUTO_TEST_CASE( test_member_access )
 {
     Namespace ns;
-    ns.register_class<SomeClass>("SomeClass")
+    ns.register_type<SomeClass>("SomeClass")
         .add("data", &SomeClass::data_member)
         .add("method", &SomeClass::member_function)
         .add("other_object", &SomeClass::other_object)
@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE( test_member_access )
             return obj.data_member + " something";
         })
     ;
-    ns.register_class<std::string>("string");
+    ns.register_type<std::string>("string");
 
     auto object = ns.object(SomeClass());
     BOOST_CHECK_EQUAL( object.get({"data"}).to_string(), "data member" );
@@ -85,9 +85,18 @@ BOOST_AUTO_TEST_CASE( test_member_access )
 BOOST_AUTO_TEST_CASE( test_class_not_found )
 {
     Namespace ns;
-    ns.register_class<SomeClass>("SomeClass")
+    ns.register_type<SomeClass>("SomeClass")
         .add("data", &SomeClass::data_member)
         .add("method", &SomeClass::member_function)
     ;
     BOOST_CHECK_THROW( ns.object(SomeClass()).get({"data"}), ClassNotFound );
 }
+
+BOOST_AUTO_TEST_CASE( test_builtin )
+{
+    Namespace ns;
+    ns.register_type<int>("int");
+
+    BOOST_CHECK_EQUAL( ns.object(123).to_string(), "123" );
+}
+
