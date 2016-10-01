@@ -197,6 +197,19 @@ namespace wrapper {
         std::string _name;
     };
 
+
+    namespace detail {
+        template<class HeldType>
+            using Getter = std::function<Object(const HeldType&)>;
+
+        template<class HeldType>
+            using GetterMap = std::unordered_map<std::string, Getter<HeldType>>;
+
+        template<class HeldType>
+            using UnregGetter = std::function<Object(const HeldType&, const std::string& name)>;
+
+    } // namespace detail
+
     /**
      * \brief Wrapper around a class
      */
@@ -211,8 +224,27 @@ namespace wrapper {
             _parent_namespace(parent_namespace)
         {}
 
+        /**
+         * \brief Exposes an attribute
+         * \tparam T can be:
+         * * A pointer to a data/function member of HeldType
+         * * Any function object taking no arguments
+         * * Any function object taking a const HeldType& argument
+         * * Any other type registered to the parent namespace
+         */
         template<class T>
-            ClassWrapper& add(const std::string& name, const T& value);
+            ClassWrapper& add_readonly(const std::string& name, const T& value);
+
+        /**
+         * \brief Sets a fallback functions used to get additional unregistered
+         *        attributes
+         * \tparam T can be:
+         * * A pointer to a function member of HeldType taking a const std::string&
+         * * Any function object taking a const HeldType& and a const std::string&
+         * * Any function object taking a const std::string&
+         */
+        template<class T>
+            ClassWrapper& fallback_getter(const T& functor);
 
         const std::type_info& type_info() const noexcept override
         {
@@ -222,13 +254,17 @@ namespace wrapper {
         /**
          * \brief Returns an attribute of the passed object
          * \throws MemberNotFound if \p name is not something registered
-         * with one of the add() overloads
+         * with one of the add_readonly() overloads
          */
         Object get_child(const HeldType& owner, const std::string& attrname) const
         {
             auto iter = getters.find(attrname);
             if ( iter == getters.end() )
+            {
+                if ( _fallback_getter )
+                    return _fallback_getter(owner, attrname);
                 throw MemberNotFound("\"" + attrname + "\" is not a member of " + name());
+            }
             return iter->second(owner);
         }
 
@@ -238,9 +274,8 @@ namespace wrapper {
         }
 
     private:
-
-        using Getter = std::function<Object(const HeldType&)>;
-        std::unordered_map<std::string, Getter> getters;
+        detail::GetterMap<HeldType> getters;
+        detail::UnregGetter<HeldType> _fallback_getter;
         Namespace* _parent_namespace;
     };
 
@@ -480,13 +515,70 @@ namespace wrapper {
                 };
             }
 
+
+        /**
+         * \brief Exposes a member function as a fallback getter
+         */
+        template<class HeldType, class T>
+            auto unreg_getter(
+                const ClassWrapper<HeldType>* object,
+                T (HeldType::*pointer)(const std::string&) const)
+            {
+                return [object, pointer](const HeldType& value, const std::string& name) {
+                    return object->parent_namespace().object((value.*pointer)(name));
+                };
+            }
+
+        /**
+         * \brief Exposes an arbitraty functon (taking a const reference to the
+         * class and a name as a string) as a fallback getter
+         */
+        template<class HeldType, class Functor>
+            auto unreg_getter(
+                const ClassWrapper<HeldType>* object,
+                const Functor& functor,
+                std::enable_if_t<IsCallableAnyReturn<Functor, const HeldType&, const std::string&>::value, bool> = true
+            )
+            {
+                return [object, functor]
+                (const HeldType& value, const std::string& name) {
+                    return object->parent_namespace().object(functor(value, name));
+                };
+            }
+
+        /**
+         * \brief Exposes an arbitraty functon (taking a name as a string)
+         * as a fallback getter
+         */
+        template<class HeldType, class Functor>
+            auto unreg_getter(
+                const ClassWrapper<HeldType>* object,
+                const Functor& functor,
+                std::enable_if_t<IsCallableAnyReturn<Functor, const std::string&>::value, bool> = true
+            )
+            {
+                return [object, functor]
+                (const HeldType&, const std::string& name) {
+                    return object->parent_namespace().object(functor(name));
+                };
+            }
+
     } // namespace detail
 
     template<class Class>
     template<class T>
-        ClassWrapper<Class>& ClassWrapper<Class>::add(const std::string& name, const T& value)
+        ClassWrapper<Class>& ClassWrapper<Class>::add_readonly(const std::string& name, const T& value)
         {
             detail::register_read<HeldType>(getters, this, name, value);
+            return *this;
+        }
+
+
+    template<class Class>
+    template<class T>
+        ClassWrapper<Class>& ClassWrapper<Class>::fallback_getter(const T& functor)
+        {
+            _fallback_getter = detail::unreg_getter<HeldType>(this, functor);
             return *this;
         }
 } // namespace wrapper
