@@ -77,6 +77,28 @@ namespace wrapper {
 }
 
 /**
+ * \brief Exception thrown when trying to access a member that has not been exposed
+ */
+class MemberNotFound : std::runtime_error
+{
+public:
+    explicit MemberNotFound(const std::string& message)
+        : runtime_error(message)
+    {}
+};
+
+/**
+ * \brief Exception thrown when trying to access a type that has not been exposed
+ */
+class TypeError : std::logic_error
+{
+public:
+    explicit TypeError(const std::string& message)
+        : logic_error(message)
+    {}
+};
+
+/**
  * \brief Main interface to access objects
  */
 class Object
@@ -114,6 +136,12 @@ public:
         return value->to_string();
     }
 
+    template<class T>
+    const T& cast() const;
+
+    template<class T>
+    bool has_type() const;
+
 private:
     Object get(MemberPathIterator begin, MemberPathIterator end) const
     {
@@ -123,28 +151,6 @@ private:
     }
 
     std::shared_ptr<wrapper::ValueWrapper> value;
-};
-
-/**
- * \brief Exception thrown when trying to access a member that has not been exposed
- */
-class MemberNotFound : std::runtime_error
-{
-public:
-    explicit MemberNotFound(const std::string& message)
-        : runtime_error(message)
-    {}
-};
-
-/**
- * \brief Exception thrown when trying to access a type that has not been exposed
- */
-class ClassNotFound : std::logic_error
-{
-public:
-    explicit ClassNotFound(const std::string& message)
-        : logic_error(message)
-    {}
 };
 
 /**
@@ -175,8 +181,9 @@ namespace wrapper {
     class TypeWrapper
     {
     public:
-        TypeWrapper(std::string&& name)
-            : _name(std::move(name))
+        TypeWrapper(std::string&& name, Namespace* parent_namespace)
+            : _name(std::move(name)),
+            _parent_namespace(parent_namespace)
         {}
 
         virtual ~TypeWrapper(){}
@@ -194,8 +201,14 @@ namespace wrapper {
          */
         virtual const std::type_info& type_info() const noexcept = 0;
 
+        const Namespace& parent_namespace() const
+        {
+            return *_parent_namespace;
+        }
+
     private:
         std::string _name;
+        Namespace* _parent_namespace;
     };
 
 
@@ -221,8 +234,7 @@ namespace wrapper {
         using HeldType = Class;
 
         ClassWrapper(std::string name, Namespace* parent_namespace)
-            : TypeWrapper(std::move(name)),
-            _parent_namespace(parent_namespace)
+            : TypeWrapper(std::move(name), parent_namespace)
         {}
 
         /**
@@ -269,15 +281,9 @@ namespace wrapper {
             return iter->second(owner);
         }
 
-        const Namespace& parent_namespace() const
-        {
-            return *_parent_namespace;
-        }
-
     private:
         detail::GetterMap<HeldType> getters;
         detail::UnregGetter<HeldType> _fallback_getter;
-        Namespace* _parent_namespace;
     };
 
 } // namespace wrapper
@@ -351,6 +357,11 @@ namespace wrapper {
             return static_cast<const ClassWrapper<Class>&>(type());
         }
 
+        const Class& get() const
+        {
+            return value.get();
+        }
+
     private:
         ValueHolder<Class> value;
     };
@@ -388,14 +399,14 @@ public:
 
     /**
      * \brief Creates an object wrapper around the value
-     * \throws ClassNotFound if \p Class has not been registered with register_class
+     * \throws TypeError if \p Class has not been registered with register_class
      */
     template<class Class>
     Object object(const Class& value) const
     {
         auto iter = classes.find(typeid(Class));
         if ( iter == classes.end() )
-            throw ClassNotFound("Unregister type");
+            throw TypeError("Unregister type");
         return Object(std::make_shared<wrapper::ObjectWrapper<Class>>(
             value,
             static_cast<wrapper::ClassWrapper<Class>*>(iter->second.get())
@@ -405,6 +416,19 @@ public:
     Object object(const Object& value) const
     {
         return value;
+    }
+
+    template<class T>
+    std::string type_name(bool throw_on_error = false) const
+    {
+        auto iter = classes.find(typeid(T));
+        if ( iter == classes.end() )
+        {
+            if ( throw_on_error )
+                throw TypeError("Unregistered type");
+            return typeid(T).name();
+        }
+        return iter->second->name();
     }
 
 private:
@@ -564,6 +588,24 @@ namespace wrapper {
             return *this;
         }
 } // namespace wrapper
+
+template<class T>
+const T& Object::cast() const
+{
+    if ( auto ptr = dynamic_cast<wrapper::ObjectWrapper<T>*>(value.get()) )
+        return ptr->get();
+    throw TypeError(
+        "Object is of type " + value->type().name() + ", not "
+        + value->type().parent_namespace().type_name<T>()
+    );
+}
+
+template<class T>
+bool Object::has_type() const
+{
+    return dynamic_cast<wrapper::ObjectWrapper<T>*>(value.get());
+}
+
 
 } // namespace scripting
 } // namespace melanolib

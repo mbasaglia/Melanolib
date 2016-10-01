@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE( test_class_not_found )
         .add_readonly("data", &SomeClass::data_member)
         .add_readonly("method", &SomeClass::member_function)
     ;
-    BOOST_CHECK_THROW( ns.object(SomeClass()).get({"data"}), ClassNotFound );
+    BOOST_CHECK_THROW( ns.object(SomeClass()).get({"data"}), TypeError );
 }
 
 BOOST_AUTO_TEST_CASE( test_builtin )
@@ -170,4 +170,37 @@ BOOST_AUTO_TEST_CASE( test_fallback_getter_functor_no_object )
     BOOST_CHECK_EQUAL( object.get({"foo"}).to_string(), "bar");
     BOOST_CHECK_EQUAL( object.get({"hello"}).to_string(), "world");
 }
+
+BOOST_AUTO_TEST_CASE( test_cast )
+{
+    Namespace ns;
+    ns.register_type<int>();
+    ns.register_type<float>();
+
+    BOOST_CHECK_EQUAL( ns.object(123).cast<int>(), 123 );
+    BOOST_CHECK_THROW( ns.object(123).cast<float>(), TypeError );
+    BOOST_CHECK_THROW( ns.object(123).cast<double>(), TypeError );
+}
+
+BOOST_AUTO_TEST_CASE( test_type_name )
+{
+    Namespace ns;
+    ns.register_type<int>("Number");
+
+    BOOST_CHECK_EQUAL( ns.type_name<int>(), "Number" );
+    BOOST_CHECK_EQUAL( ns.type_name<float>(), typeid(float).name() );
+    BOOST_CHECK_THROW( ns.type_name<float>(true), TypeError );
+}
+
+BOOST_AUTO_TEST_CASE( test_has_type )
+{
+    Namespace ns;
+    ns.register_type<int>();
+    ns.register_type<float>();
+
+    BOOST_CHECK( ns.object(123).has_type<int>() );
+    BOOST_CHECK( !ns.object(123).has_type<float>() );
+    BOOST_CHECK( !ns.object(123).has_type<double>() );
+}
+
 
