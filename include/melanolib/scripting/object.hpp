@@ -702,16 +702,6 @@ namespace wrapper {
         template <int... Indices>
             struct IndexPackBuilder<0, Indices...> : IndexPack<Indices...> {};
 
-
-        /**
-         * \brief Dummy function to build an index pack for the parameters of a pointer to member function
-         */
-        template <class Class, class Ret, class... Args>
-        constexpr int count_args(Ret(Class::*)(Args...) const){ return sizeof...(Args); }
-        template <class Class, class Ret, class... Args>
-        constexpr int count_args(Ret(Class::*)(Args...)){ return sizeof...(Args); }
-
-
         namespace function {
             /** Member function
              * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
