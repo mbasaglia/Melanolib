@@ -48,6 +48,8 @@ namespace wrapper {
             : _type(type)
         {}
 
+        virtual ~ValueWrapper(){}
+
         /**
          * \brief Returns a reference to the wrapper of the type of the object
          */
