@@ -713,77 +713,49 @@ namespace wrapper {
 
 
         namespace function {
-            /** Const, member function
+            /** Member function
              * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
              * \tparam Class        Class for the member function
              * \tparam Ret          Return type
              * \tparam Args         Function parameter types
              * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
              */
-            template<class Class, class Ret, class... Args, int... Indices>
-            Ret call_helper(
-                Ret(Class::*func)(Args...) const,
+            template<class Class, class Ret, class Functor, class... Args, int... Indices>
+            Ret call_helper_member(
+                Functor functor,
                 Class& object,
                 const Object::Arguments& args,
+                DummyTuple<Args...>,
                 IndexPack<Indices...>)
             {
                 if ( args.size() != sizeof...(Args) )
                     throw FunctionError("Wrong number of arguments");
-                return (object.*func)(args[Indices].cast<Args>()...);
+                return (object.*functor)(args[Indices].cast<Args>()...);
             }
 
-            /** Const, member function
+            /** Member function
              * \brief Exposes a memeber function as a method of the class
              */
-            template<class HeldType, class Ret, class... Args>
-            Method<HeldType> wrap_functor(
+            template<class HeldType, class Functor>
+            auto wrap_functor(
                 const ClassWrapper<HeldType>* type,
                 const std::string& name,
-                Ret (HeldType::*pointer)(Args...) const)
+                Functor pointer)
+            -> std::enable_if_t<std::is_member_function_pointer<Functor>::value, Method<HeldType>>
             {
                 return [type, pointer](HeldType& value, const Object::Arguments& args) {
+                    using Sig = MemberFunctionSignature<decltype(pointer)>;
                     return type->parent_namespace().object(
-                        call_helper(pointer, value, args, IndexPackBuilder<sizeof...(Args)>{})
+                        call_helper_member<HeldType, typename Sig::return_type>(
+                            pointer, value, args,
+                            typename Sig::argument_types_tag(),
+                            IndexPackBuilder<Sig::argument_count>()
+                        )
                     );
                 };
             }
 
-            /** Mutable, member function
-             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
-             * \tparam Class        Class for the member function
-             * \tparam Ret          Return type
-             * \tparam Args         Function parameter types
-             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
-             */
-            template<class Class, class Ret, class... Args, int... Indices>
-            Ret call_helper(
-                Ret(Class::*func)(Args...),
-                Class& object,
-                const Object::Arguments& args,
-                IndexPack<Indices...>)
-            {
-                if ( args.size() != sizeof...(Args) )
-                    throw FunctionError("Wrong number of arguments");
-                return (object.*func)(args[Indices].cast<Args>()...);
-            }
-
-            /** Mutable, member function
-             * \brief Exposes a memeber function as a method of the class
-             */
-            template<class HeldType, class Ret, class... Args>
-            Method<HeldType> wrap_functor(
-                const ClassWrapper<HeldType>* type,
-                const std::string& name,
-                Ret (HeldType::*pointer)(Args...))
-            {
-                return [type, pointer](HeldType& value, const Object::Arguments& args) {
-                    return type->parent_namespace().object(
-                        call_helper(pointer, value, args, IndexPackBuilder<sizeof...(Args)>{})
-                    );
-                };
-            }
-
-            /** Const/Mutable, function object/pointer
+            /** Function object/pointer
              * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
              * \tparam Class        Class for the member function
              * \tparam Functor      Functor type
@@ -791,7 +763,7 @@ namespace wrapper {
              * \tparam Args         Function parameter types
              * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
              */
-            template<class Class, class Functor, class Ret, class... Args, int... Indices>
+            template<class Class, class Ret, class Functor, class... Args, int... Indices>
             Ret call_helper_functor(
                 Functor functor,
                 Class& object,
@@ -804,19 +776,20 @@ namespace wrapper {
                 return functor(object, args[Indices].cast<Args>()...);
             }
 
-            /** Const/Mutable, function object/pointer
+            /** Function object/pointer
              * \brief Exposes a memeber function as a method of the class
              */
             template<class HeldType, class Functor>
-            Method<HeldType> wrap_functor(
+            auto wrap_functor(
                 const ClassWrapper<HeldType>* type,
                 const std::string& name,
                 const Functor& functor)
+            -> std::enable_if_t<!std::is_member_function_pointer<Functor>::value, Method<HeldType>>
             {
                 return [type, functor](HeldType& value, const Object::Arguments& args) {
                     using Sig = FunctionSignature<Functor>;
                     return type->parent_namespace().object(
-                        call_helper_functor<HeldType, Functor, typename Sig::return_type>(
+                        call_helper_functor<HeldType, typename Sig::return_type>(
                             functor, value, args,
                             typename Sig::argument_types_tag::tail(),
                             IndexPackBuilder<Sig::argument_count-1>()
