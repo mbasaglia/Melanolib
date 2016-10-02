@@ -8,18 +8,22 @@ Libraries
 
 ### Header-only
 
+ * dtat_structures - Various data structures and supporting functions
  * geo - Basic geometry utilities
- * math/math - Misc mathematical functions
+ * math - Misc mathematical functions and types
+ * scripting - Infrastructure to implement scripting languages
+ * string/ascii - Ascii character classification
  * string/quickstream - Simple and fast string input class
+ * string/simple_stringutils - Various string functions
  * string/string_view - A string view
  * string/trie - Prefix tree data structure
  * utils - Miscellaneous utilities
 
 ### Compiled
 
+ * color - Color class with different color spaces (only Color::format needs to link)
  * dynlib - Utilities to load dynamic library at runtime (Currently only implemented for POSIX)
- * math/random - Simple uniform random number generation
- * stringutils - Various string functions and English inflection
+ * stringutils - Various string functions, UTF8 support, and natural language generation
  * time - Date and time utilities
 
 Configuration
