@@ -67,7 +67,7 @@
                 return std::any_cast<T>(std::forward<Arg>(arg));
             }
     } // namespace melanolib
-#  elif __has_include(<experimental/any>) && !defined(MELANOLIB_BOOST_ANY)
+#  elif MELANOLIB_HAS_INCLUDE(<experimental/any>) && !defined(MELANOLIB_BOOST_ANY)
 #    include <experimental/any>
     namespace melanolib {
         using Any = std::experimental::any;
@@ -139,5 +139,15 @@ template <class T, std::size_t Size>
     }
 } // namespace std
 #endif // C++17
+
+#ifndef __cpp_lib_invoke
+namespace std {
+template<class... Args>
+    auto invoke(Args&&... args) {
+        return std::__invoke(std::forward<Args>(args)...);
+    }
+} // namespace std
+#endif // C++17 std::invoke
+
 
 #endif // MELANOLIB_CXX_COMPAT_HPP

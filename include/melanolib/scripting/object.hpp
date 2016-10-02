@@ -29,6 +29,7 @@
 #include <sstream>
 
 #include "melanolib/utils/type_utils.hpp"
+#include "melanolib/utils/c++-compat.hpp"
 
 namespace melanolib {
 namespace scripting {
@@ -555,28 +556,20 @@ namespace wrapper {
         /**
          * \brief Exposes a data memeber as an attribute of this class
          */
-        template<class HeldType, class T>
-            void register_read(GetterMap<HeldType>& getters,
-                               const ClassWrapper<HeldType>* object,
-                               const std::string& name,
-                               T HeldType::* pointer)
+        template<class HeldType, class Functor>
+            std::enable_if_t<
+                std::is_member_pointer<Functor>::value ||
+                IsCallableAnyReturn<Functor, const HeldType*>::value,
+                Getter<HeldType>
+            >
+            register_read(
+                const ClassWrapper<HeldType>* object,
+                const Functor& functor)
             {
-                getters[name] = [object, pointer](const HeldType& value) {
-                    return object->parent_namespace().object(value.*pointer);
-                };
-            }
-
-        /**
-         * \brief Exposes a memeber function as an attribute of this class
-         */
-        template<class HeldType, class T>
-            void register_read(GetterMap<HeldType>& getters,
-                               const ClassWrapper<HeldType>* object,
-                               const std::string& name,
-                               T (HeldType::*pointer)() const)
-            {
-                getters[name] = [object, pointer](const HeldType& value) {
-                    return object->parent_namespace().object((value.*pointer)());
+                return [object, functor](const HeldType& value) {
+                    return object->parent_namespace().object(
+                        std::invoke(functor, &value)
+                    );
                 };
             }
 
@@ -585,13 +578,15 @@ namespace wrapper {
          * as an attribute of this class
          */
         template<class HeldType, class Functor>
-            std::enable_if_t<IsCallableAnyReturn<Functor, const HeldType&>::value>
-            register_read(GetterMap<HeldType>& getters,
-                          const ClassWrapper<HeldType>* object,
-                          const std::string& name,
-                          const Functor& functor)
+            std::enable_if_t<
+                IsCallableAnyReturn<Functor, const HeldType&>::value,
+                Getter<HeldType>
+            >
+            register_read(
+                const ClassWrapper<HeldType>* object,
+                const Functor& functor)
             {
-                getters[name] = [object, functor](const HeldType& value) {
+                return [object, functor](const HeldType& value) {
                     return object->parent_namespace().object(functor(value));
                 };
             }
@@ -601,13 +596,14 @@ namespace wrapper {
          * as an attribute of this class
          */
         template<class HeldType, class Functor>
-            std::enable_if_t<IsCallableAnyReturn<Functor>::value>
-            register_read(GetterMap<HeldType>& getters,
-                          const ClassWrapper<HeldType>* object,
-                          const std::string& name,
+            std::enable_if_t<
+                IsCallableAnyReturn<Functor>::value,
+                Getter<HeldType>
+            >
+            register_read(const ClassWrapper<HeldType>* object,
                           const Functor& functor)
             {
-                getters[name] = [object, functor](const HeldType&) {
+                return [object, functor](const HeldType&) {
                     return object->parent_namespace().object(functor());
                 };
             }
@@ -618,13 +614,15 @@ namespace wrapper {
         template<class HeldType, class T>
             std::enable_if_t<
                 !IsCallableAnyReturn<T, const HeldType&>::value &&
-                !IsCallableAnyReturn<T>::value>
-            register_read(GetterMap<HeldType>& getters,
-                          const ClassWrapper<HeldType>* object,
-                          const std::string& name,
+                !IsCallableAnyReturn<T>::value &&
+                !IsCallableAnyReturn<T, const HeldType*>::value &&
+                !std::is_member_pointer<T>::value,
+                Getter<HeldType>
+            >
+            register_read(const ClassWrapper<HeldType>* object,
                           const T& value)
             {
-                getters[name] = [object, value](const HeldType&) {
+                return [object, value](const HeldType&) {
                     return object->parent_namespace().object(value);
                 };
             }
@@ -633,13 +631,18 @@ namespace wrapper {
         /**
          * \brief Exposes a member function as a fallback getter
          */
-        template<class HeldType, class T>
-            auto unreg_getter(
+        template<class HeldType, class Functor>
+            std::enable_if_t<
+                std::is_member_pointer<Functor>::value ||
+                IsCallableAnyReturn<Functor, const HeldType*, const std::string&>::value,
+                UnregGetter<HeldType>
+            >
+            unreg_getter(
                 const ClassWrapper<HeldType>* object,
-                T (HeldType::*pointer)(const std::string&) const)
+                const Functor& functor)
             {
-                return [object, pointer](const HeldType& value, const std::string& name) {
-                    return object->parent_namespace().object((value.*pointer)(name));
+                return [object, functor](const HeldType& value, const std::string& name) {
+                    return object->parent_namespace().object(std::invoke(functor, &value, name));
                 };
             }
 
@@ -648,11 +651,13 @@ namespace wrapper {
          * class and a name as a string) as a fallback getter
          */
         template<class HeldType, class Functor>
-            auto unreg_getter(
+            std::enable_if_t<
+                IsCallableAnyReturn<Functor, const HeldType&, const std::string&>::value,
+                UnregGetter<HeldType>
+            >
+            unreg_getter(
                 const ClassWrapper<HeldType>* object,
-                const Functor& functor,
-                std::enable_if_t<IsCallableAnyReturn<Functor, const HeldType&, const std::string&>::value, bool> = true
-            )
+                const Functor& functor)
             {
                 return [object, functor]
                 (const HeldType& value, const std::string& name) {
@@ -703,86 +708,72 @@ namespace wrapper {
             struct IndexPackBuilder<0, Indices...> : IndexPack<Indices...> {};
 
         namespace function {
-            /** Member function
+            /** Member function or functor taking a pointer as first argument
              * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
-             * \tparam Class        Class for the member function
+             * \tparam HeldType     Class for the member function
              * \tparam Ret          Return type
              * \tparam Args         Function parameter types
              * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
              */
-            template<class Class, class Ret, class Functor, class... Args, int... Indices>
-            Ret call_helper_member(
+            template<class HeldType, class Ret, class Functor, class... Args, int... Indices>
+            auto call_helper(
                 Functor functor,
-                Class& object,
+                HeldType& object,
                 const Object::Arguments& args,
                 DummyTuple<Args...>,
                 IndexPack<Indices...>)
+            -> std::enable_if_t<
+                std::is_member_function_pointer<Functor>::value ||
+                IsCallableAnyReturn<Functor, HeldType*, Args...>::value,
+                Ret
+            >
             {
                 if ( args.size() != sizeof...(Args) )
                     throw FunctionError("Wrong number of arguments");
-                return (object.*functor)(args[Indices].cast<Args>()...);
+                return std::invoke(functor, object, args[Indices].cast<Args>()...);
             }
 
-            /** Member function
-             * \brief Exposes a memeber function as a method of the class
-             */
-            template<class HeldType, class Functor>
-            auto wrap_functor(
-                const ClassWrapper<HeldType>* type,
-                const std::string& name,
-                Functor pointer)
-            -> std::enable_if_t<std::is_member_function_pointer<Functor>::value, Method<HeldType>>
-            {
-                return [type, pointer](HeldType& value, const Object::Arguments& args) {
-                    using Sig = MemberFunctionSignature<decltype(pointer)>;
-                    return type->parent_namespace().object(
-                        call_helper_member<HeldType, typename Sig::return_type>(
-                            pointer, value, args,
-                            typename Sig::argument_types_tag(),
-                            IndexPackBuilder<Sig::argument_count>()
-                        )
-                    );
-                };
-            }
-
-            /** Function object/pointer
+            /** Function object/pointer taking a reference or value as first argument
              * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
-             * \tparam Class        Class for the member function
+             * \tparam HeldType     Class for the member function
              * \tparam Functor      Functor type
              * \tparam Ret          Return type
              * \tparam Args         Function parameter types
              * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
              */
-            template<class Class, class Ret, class Functor, class... Args, int... Indices>
-            Ret call_helper_functor(
+            template<class HeldType, class Ret, class Functor, class Head, class... Args, int... Indices>
+            auto call_helper(
                 Functor functor,
-                Class& object,
+                HeldType& object,
                 const Object::Arguments& args,
-                DummyTuple<Args...>,
-                IndexPack<Indices...>)
+                DummyTuple<Head, Args...>,
+                IndexPack<0, Indices...>)
+            -> std::enable_if_t<
+                IsCallableAnyReturn<Functor, HeldType&, Args...>::value,
+                Ret
+            >
             {
                 if ( args.size() != sizeof...(Args) )
                     throw FunctionError("Wrong number of arguments");
-                return functor(object, args[Indices].cast<Args>()...);
+                return std::invoke(functor, object, args[Indices-1].cast<Args>()...);
             }
 
-            /** Function object/pointer
+            /** Member function
              * \brief Exposes a memeber function as a method of the class
              */
             template<class HeldType, class Functor>
             auto wrap_functor(
                 const ClassWrapper<HeldType>* type,
                 const std::string& name,
-                const Functor& functor)
-            -> std::enable_if_t<!std::is_member_function_pointer<Functor>::value, Method<HeldType>>
+                Functor functor)
             {
                 return [type, functor](HeldType& value, const Object::Arguments& args) {
                     using Sig = FunctionSignature<Functor>;
                     return type->parent_namespace().object(
-                        call_helper_functor<HeldType, typename Sig::return_type>(
+                        call_helper<HeldType, typename Sig::return_type>(
                             functor, value, args,
-                            typename Sig::argument_types_tag::tail(),
-                            IndexPackBuilder<Sig::argument_count-1>()
+                            typename Sig::argument_types_tag(),
+                            IndexPackBuilder<Sig::argument_count>()
                         )
                     );
                 };
@@ -796,7 +787,7 @@ namespace wrapper {
     template<class T>
         ClassWrapper<Class>& ClassWrapper<Class>::add_readonly(const std::string& name, const T& value)
         {
-            detail::register_read<HeldType>(getters, this, name, value);
+            getters[name] = detail::register_read<HeldType>(this, value);
             return *this;
         }
 

@@ -106,6 +106,18 @@ template<class Class>
     {
     };
 
+template<class Class, class Ret, class...Args>
+    struct FunctionSignature<Ret(Class::*)(Args...)>
+        : public MemberFunctionSignature<Ret(Class::*)(Args...)>
+    {
+    };
+
+template<class Class, class Ret, class...Args>
+    struct FunctionSignature<Ret(Class::*)(Args...) const>
+        : public MemberFunctionSignature<Ret(Class::*)(Args...) const>
+    {
+    };
+
 /**
  * \brief Clean syntax to get a function pointer type
  */
