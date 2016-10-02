@@ -458,3 +458,53 @@ BOOST_AUTO_TEST_CASE( test_fallback_setter_functor_no_object )
     object.set("foo", ns.object<std::string>("bar"));
     BOOST_CHECK_EQUAL( map["foo"], "bar" );
 }
+
+struct Constructible
+{
+    Constructible(std::string data) : data(data) {}
+    std::string data;
+};
+
+BOOST_AUTO_TEST_CASE( test_constructor_functor )
+{
+    Namespace ns;
+    ns.register_type<Constructible>("Constructible")
+        .add_readonly("data", &Constructible::data)
+        .constructor([](const std::string& data){
+            return Constructible(data);
+        })
+    ;
+    ns.register_type<std::string>();
+    ns.register_type<int>();
+
+    auto param = ns.object<std::string>("foo");
+    BOOST_CHECK_EQUAL( ns.object("Constructible", {param}).get({"data"}).to_string(), "foo" );
+    BOOST_CHECK_THROW( ns.object("Constructible", {param, param}), FunctionError );
+    BOOST_CHECK_THROW( ns.object("Constructible", {ns.object(1)}), TypeError );
+}
+
+BOOST_AUTO_TEST_CASE( test_no_constructor )
+{
+    Namespace ns;
+    ns.register_type<Constructible>("Constructible")
+        .add_readonly("data", &Constructible::data)
+    ;
+    ns.register_type<std::string>();
+
+    auto param = ns.object<std::string>("foo");
+    BOOST_CHECK_THROW( ns.object("Constructible", {param}), MemberNotFound );
+}
+
+BOOST_AUTO_TEST_CASE( test_constructor_noarg )
+{
+    Namespace ns;
+    ns.register_type<Constructible>("Constructible")
+        .add_readonly("data", &Constructible::data)
+        .constructor([](){
+            return Constructible("data");
+        })
+    ;
+    ns.register_type<std::string>();
+
+    BOOST_CHECK_EQUAL( ns.object("Constructible", {}).get({"data"}).to_string(), "data" );
+}

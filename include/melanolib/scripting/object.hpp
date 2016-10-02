@@ -273,6 +273,11 @@ namespace wrapper {
             return *_parent_namespace;
         }
 
+        /**
+         * \brief Calls a dynamic constructor
+         */
+        virtual Object make_object(const Object::Arguments& arguments) const = 0;
+
     private:
         std::string _name;
         Namespace* _parent_namespace;
@@ -303,6 +308,9 @@ namespace wrapper {
 
         template<class HeldType>
             using UnregSetter = std::function<void(HeldType&, const std::string& name, const Object&)>;
+
+        template<class HeldType>
+            using Constructor = std::function<Object(const Object::Arguments&)>;
 
     } // namespace detail
 
@@ -373,7 +381,7 @@ namespace wrapper {
             }
 
         /**
-         * \brief Sets a fallback functions used to set additional unregistered attributes
+         * \brief Sets a fallback function used to set additional unregistered attributes
          * \tparam T can be:
          * * A pointer to a function member of HeldType taking a const std::string& and another value
          * * Any function object taking a const HeldType&, a const std::string& and another value
@@ -391,6 +399,13 @@ namespace wrapper {
          */
         template<class T>
             ClassWrapper& add_method(const std::string& name, const T& value);
+
+        /**
+         * \brief Sets the function used as a constructor
+         * \tparam T can be any callable object
+         */
+        template<class T>
+            ClassWrapper& constructor(const T& functor);
 
         const std::type_info& type_info() const noexcept override
         {
@@ -443,15 +458,20 @@ namespace wrapper {
         Object call_method(
             HeldType& owner,
             const std::string& method,
-            const Object::Arguments& attributes) const
+            const Object::Arguments& arguments) const
         {
             auto iter = methods.find(method);
             if ( iter == methods.end() )
             {
                 throw MemberNotFound("\"" + method + "\" is not a member function of " + name());
             }
-            return iter->second(owner, attributes);
+            return iter->second(owner, arguments);
         }
+
+        /**
+         * \brief Calls a dynamic constructor
+         */
+        Object make_object(const Object::Arguments& arguments) const override;
 
     private:
         detail::GetterMap<HeldType> getters;
@@ -459,6 +479,7 @@ namespace wrapper {
         detail::MethodMap<HeldType> methods;
         detail::SetterMap<HeldType> setters;
         detail::UnregSetter<HeldType> _fallback_setter;
+        detail::Constructor<HeldType> _constructor;
     };
 
 } // namespace wrapper
@@ -585,7 +606,7 @@ public:
 
     /**
      * \brief Creates an object wrapper around the value
-     * \throws TypeError if \p Class has not been registered with register_class
+     * \throws TypeError if \p Class has not been registered with register_type
      */
     template<class Class>
     Object object(const Class& value) const
@@ -595,7 +616,7 @@ public:
 
     /**
      * \brief Creates an object wrapper around the value
-     * \throws TypeError if \p Class has not been registered with register_class
+     * \throws TypeError if \p Class has not been registered with register_type
      */
     template<class Class, class... Args>
     Object object(Args&&... args) const
@@ -607,6 +628,24 @@ public:
             std::forward<Args>(args)...,
             static_cast<wrapper::ClassWrapper<Class>*>(iter->second.get())
         ));
+    }
+
+    /**
+     * \brief Creates an object from run-time values
+     * \throws TypeError if the type has not been registered
+     * \note It's possible for multiple types to have the same name, if that
+     * is the case it is not specified which one will be selected.
+     */
+    Object object(const std::string& class_name, const Object::Arguments& args) const
+    {
+        for ( const auto& p : classes )
+        {
+            if ( p.second->name() == class_name )
+            {
+                return p.second->make_object(args);
+            }
+        }
+        throw TypeError("Unregister type: " + class_name);
     }
 
     Object object(const Object& value) const
@@ -989,7 +1028,7 @@ namespace wrapper {
             }
 
             /**
-             * Function object/pointer taking at least 1 argument
+             * Function object/pointer taking no arguments
              */
             template<class HeldType, class Ret, class Functor>
             auto call_helper(
@@ -1009,7 +1048,7 @@ namespace wrapper {
             }
 
             /** Member function
-             * \brief Exposes a memeber function as a method of the class
+             * \brief Exposes a functor as a method of the class
              */
             template<class HeldType, class Functor>
             auto wrap_functor(
@@ -1022,6 +1061,42 @@ namespace wrapper {
                     return type->parent_namespace().object(
                         call_helper<HeldType, typename Sig::return_type>(
                             functor, value, args,
+                            typename Sig::argument_types_tag(),
+                            IndexPackBuilder<Sig::argument_count>()
+                        )
+                    );
+                };
+            }
+
+            /**
+             * Function object/pointer
+             */
+            template<class HeldType, class Functor, class... Args, int... Indices>
+            HeldType ctor_helper(
+                Functor functor,
+                const Object::Arguments& args,
+                DummyTuple<Args...>,
+                IndexPack<Indices...>)
+            {
+                if ( args.size() != sizeof...(Args) )
+                    throw FunctionError("Wrong number of arguments");
+                return std::invoke(functor, args[Indices].cast<Args>()...);
+            }
+
+            /** Constructor
+             * \brief Exposes a functor as a class constructor
+             * \todo Wrap constructors directly
+             */
+            template<class HeldType, class Functor>
+            auto wrap_ctor(
+                const ClassWrapper<HeldType>* type,
+                Functor functor)
+            {
+                return [type, functor](const Object::Arguments& args) {
+                    using Sig = FunctionSignature<Functor>;
+                    return type->parent_namespace().object(
+                        ctor_helper<HeldType>(
+                            functor, args,
                             typename Sig::argument_types_tag(),
                             IndexPackBuilder<Sig::argument_count>()
                         )
@@ -1075,6 +1150,22 @@ namespace wrapper {
             _fallback_setter = detail::setter::unreg_setter<HeldType>(this, functor);
             return *this;
         }
+
+    template<class Class>
+    template<class T>
+        ClassWrapper<Class>& ClassWrapper<Class>::constructor(const T& functor)
+    {
+        _constructor = detail::function::wrap_ctor<HeldType>(this, functor);
+        return *this;
+    }
+
+    template<class Class>
+    Object ClassWrapper<Class>::make_object(const Object::Arguments& arguments) const
+    {
+        if ( !_constructor )
+            throw MemberNotFound("Class " + name() + " doesn't have a constructor");
+        return _constructor(arguments);
+    }
 
 } // namespace wrapper
 
