@@ -73,8 +73,14 @@ namespace wrapper {
         virtual Object get_child(const std::string& name) const = 0;
 
         /**
-         * \brief Calls a child function
+         * \brief Sets a value on a child object
          * \throws MemberNotFound or TypeError
+         */
+        virtual void set_child(const std::string& name, const Object& value) = 0;
+
+        /**
+         * \brief Calls a child function
+         * \throws MemberNotFound, FunctionError or TypeError
          */
         virtual Object call_method(const std::string& name, const std::vector<Object>& args) = 0;
 
@@ -124,7 +130,6 @@ class Object
 {
 public:
     using MemberPath = std::vector<std::string>;
-    using MemberPathIterator = MemberPath::const_iterator;
     using Arguments = std::vector<Object>;
 
     explicit Object(std::shared_ptr<wrapper::ValueWrapper> value)
@@ -143,9 +148,36 @@ public:
      * \brief Returns an attribute
      * \throw MemberNotFound
      */
-    Object get(const MemberPath path) const
+    Object get(const MemberPath& path) const
     {
         return get(path.begin(), path.end());
+    }
+
+    /**
+     * \brief Returns an attribute
+     * \throw MemberNotFound
+     */
+    Object get(const std::initializer_list<std::string>& path) const
+    {
+        return get(path.begin(), path.end());
+    }
+
+    /**
+     * \brief Returns a direct attribute
+     * \throw MemberNotFound
+     */
+    Object get(const std::string& name) const
+    {
+        return value->get_child(name);
+    }
+
+    /**
+     * \brief Sets a direct attribute
+     * \throw MemberNotFound or TypeError
+     */
+    void set(const std::string& name, const Object& new_value) const
+    {
+        value->set_child(name, new_value);
     }
 
     /**
@@ -172,12 +204,13 @@ public:
     bool has_type() const;
 
 private:
-    Object get(MemberPathIterator begin, MemberPathIterator end) const
-    {
-        if ( begin >= end )
-            return *this;
-        return value->get_child(*begin).get(begin+1, end);
-    }
+    template<class Iter>
+        Object get(Iter begin, Iter end) const
+        {
+            if ( begin >= end )
+                return *this;
+            return value->get_child(*begin).get(begin+1, end);
+        }
 
     std::shared_ptr<wrapper::ValueWrapper> value;
 };
@@ -262,6 +295,15 @@ namespace wrapper {
         template<class HeldType>
             using MethodMap = std::unordered_map<std::string, Method<HeldType>>;
 
+        template<class HeldType>
+            using Setter = std::function<void(HeldType&, const Object&)>;
+
+        template<class HeldType>
+            using SetterMap = std::unordered_map<std::string, Setter<HeldType>>;
+
+        template<class HeldType>
+            using UnregSetter = std::function<void(HeldType&, const std::string& name, const Object&)>;
+
     } // namespace detail
 
     /**
@@ -280,7 +322,8 @@ namespace wrapper {
         /**
          * \brief Exposes an attribute
          * \tparam T can be:
-         * * A pointer to a data/function member of HeldType
+         * * A pointer to a data member of HeldType
+         * * A pointer to a member function of HeldType taking no arguments
          * * Any function object taking no arguments
          * * Any function object taking a const HeldType& or a const HeldType* argument
          * * Any other object of a type registered to the parent namespace
@@ -302,6 +345,45 @@ namespace wrapper {
             ClassWrapper& fallback_getter(const T& functor);
 
         /**
+         * \brief Exposes an attribute
+         * \tparam Read can be:
+         * * A pointer to a data member of HeldType
+         * * A pointer to a member function of HeldType taking no arguments
+         * * Any function object taking no arguments
+         * * Any function object taking a const HeldType& or a const HeldType* argument
+         * * Any other object of a type registered to the parent namespace
+         * \tparam Write can be:
+         * * A pointer to a data member of HeldType
+         * * A pointer to a member function of HeldType taking a single argument
+         * * Any function object taking a reference to HeldType and a single other argument
+         * * Any function object taking a pointer to HeldType and a single other argument
+         * * Any other function object or pointer taking a single argument
+         */
+        template<class Read, class Write>
+            ClassWrapper& add_readwrite(const std::string& name, const Read& read, const Write& write);
+
+        /**
+         * \brief Exposes an attribute
+         * \tparam T must be a pointer to a data member
+         */
+        template<class T>
+            ClassWrapper& add_readwrite(const std::string& name, const T& value)
+            {
+                return add_readwrite(name, value, value);
+            }
+
+        /**
+         * \brief Sets a fallback functions used to set additional unregistered attributes
+         * \tparam T can be:
+         * * A pointer to a function member of HeldType taking a const std::string& and another value
+         * * Any function object taking a const HeldType&, a const std::string& and another value
+         * * Any function object taking a const HeldType*, a const std::string& and another value
+         * * Any function object taking a const std::string& and another value
+         */
+        template<class T>
+            ClassWrapper& fallback_setter(const T& functor);
+
+        /**
          * \brief Exposes a member function
          * \tparam T can be any function object or pointer.
          * If the first argument is convertible from a pointer or reference
@@ -318,7 +400,7 @@ namespace wrapper {
         /**
          * \brief Returns an attribute of the passed object
          * \throws MemberNotFound if \p name is not something registered
-         * with one of the add_readonly() overloads
+         * with add_readonly or add_readwrite
          */
         Object get_value(const HeldType& owner, const std::string& attrname) const
         {
@@ -330,6 +412,27 @@ namespace wrapper {
                 throw MemberNotFound("\"" + attrname + "\" is not a member of " + name());
             }
             return iter->second(owner);
+        }
+
+        /**
+         * \brief Sets the value of an attribute
+         * \throws MemberNotFound if \p name is not something registered
+         * with add_readwrite
+         * \throws TypeError if \p value can't be properly converted
+         */
+        void set_value(HeldType& owner, const std::string& attrname, const Object& value) const
+        {
+            auto iter = setters.find(attrname);
+            if ( iter == setters.end() )
+            {
+                if ( _fallback_setter )
+                {
+                    _fallback_setter(owner, attrname, value);
+                    return;
+                }
+                throw MemberNotFound("\"" + attrname + "\" is not a writable member of " + name());
+            }
+            iter->second(owner, value);
         }
 
         /**
@@ -354,6 +457,8 @@ namespace wrapper {
         detail::GetterMap<HeldType> getters;
         detail::UnregGetter<HeldType> _fallback_getter;
         detail::MethodMap<HeldType> methods;
+        detail::SetterMap<HeldType> setters;
+        detail::UnregSetter<HeldType> _fallback_setter;
     };
 
 } // namespace wrapper
@@ -421,6 +526,12 @@ namespace wrapper {
         {
             return class_wrapper().get_value(value.get(), name);
         }
+
+        void set_child(const std::string& name, const Object& new_value) override
+        {
+            return class_wrapper().set_value(value.get(), name, new_value);
+        }
+
 
         const ClassWrapper<Class>& class_wrapper() const
         {
@@ -523,167 +634,297 @@ private:
 namespace wrapper {
 
     namespace detail {
-        template<class HeldType>
-            using Getter = std::function<Object(const HeldType&)>;
 
-        template<class HeldType>
-            using GetterMap = std::unordered_map<std::string, Getter<HeldType>>;
+        namespace getter {
 
-        /**
-         * \brief Exposes a data memeber as an attribute of this class
-         */
-        template<class HeldType, class Functor>
-            std::enable_if_t<
-                std::is_member_pointer<Functor>::value ||
-                IsCallableAnyReturn<Functor, const HeldType*>::value,
-                Getter<HeldType>
+            /**
+             * \brief Exposes a data memeber as an attribute of this class
+             */
+            template<class HeldType, class Functor>
+                std::enable_if_t<
+                    std::is_member_pointer<Functor>::value ||
+                    IsCallableAnyReturn<Functor, const HeldType*>::value,
+                    Getter<HeldType>
+                >
+                register_read(
+                    const ClassWrapper<HeldType>* object,
+                    const Functor& functor)
+                {
+                    return [object, functor](const HeldType& value) {
+                        return object->parent_namespace().object(
+                            std::invoke(functor, &value)
+                        );
+                    };
+                }
+
+            /**
+             * \brief Exposes an arbitraty functon (taking a const reference to the class)
+             * as an attribute of this class
+             */
+            template<class HeldType, class Functor>
+                std::enable_if_t<
+                    IsCallableAnyReturn<Functor, const HeldType&>::value,
+                    Getter<HeldType>
+                >
+                register_read(
+                    const ClassWrapper<HeldType>* object,
+                    const Functor& functor)
+                {
+                    return [object, functor](const HeldType& value) {
+                        return object->parent_namespace().object(functor(value));
+                    };
+                }
+
+            /**
+             * \brief Exposes an arbitraty functon (taking no arguments)
+             * as an attribute of this class
+             */
+            template<class HeldType, class Functor>
+                std::enable_if_t<
+                    IsCallableAnyReturn<Functor>::value,
+                    Getter<HeldType>
+                >
+                register_read(const ClassWrapper<HeldType>* object,
+                              const Functor& functor)
+                {
+                    return [object, functor](const HeldType&) {
+                        return object->parent_namespace().object(functor());
+                    };
+                }
+
+            /**
+             * \brief Exposes a fixed value as an attribute of this class
+             */
+            template<class HeldType, class T>
+                std::enable_if_t<
+                    !IsCallableAnyReturn<T, const HeldType&>::value &&
+                    !IsCallableAnyReturn<T>::value &&
+                    !IsCallableAnyReturn<T, const HeldType*>::value &&
+                    !std::is_member_pointer<T>::value,
+                    Getter<HeldType>
+                >
+                register_read(const ClassWrapper<HeldType>* object,
+                              const T& value)
+                {
+                    return [object, value](const HeldType&) {
+                        return object->parent_namespace().object(value);
+                    };
+                }
+
+
+            /**
+             * \brief Exposes a member function as a fallback getter
+             */
+            template<class HeldType, class Functor>
+                std::enable_if_t<
+                    std::is_member_pointer<Functor>::value ||
+                    IsCallableAnyReturn<Functor, const HeldType*, const std::string&>::value,
+                    UnregGetter<HeldType>
+                >
+                unreg_getter(
+                    const ClassWrapper<HeldType>* object,
+                    const Functor& functor)
+                {
+                    return [object, functor](const HeldType& value, const std::string& name) {
+                        return object->parent_namespace().object(std::invoke(functor, &value, name));
+                    };
+                }
+
+            /**
+             * \brief Exposes an arbitraty functon (taking a const reference to the
+             * class and a name as a string) as a fallback getter
+             */
+            template<class HeldType, class Functor>
+                std::enable_if_t<
+                    IsCallableAnyReturn<Functor, const HeldType&, const std::string&>::value,
+                    UnregGetter<HeldType>
+                >
+                unreg_getter(
+                    const ClassWrapper<HeldType>* object,
+                    const Functor& functor)
+                {
+                    return [object, functor]
+                    (const HeldType& value, const std::string& name) {
+                        return object->parent_namespace().object(functor(value, name));
+                    };
+                }
+
+            /**
+             * \brief Exposes an arbitraty functon (taking a name as a string)
+             * as a fallback getter
+             */
+            template<class HeldType, class Functor>
+                auto unreg_getter(
+                    const ClassWrapper<HeldType>* object,
+                    const Functor& functor,
+                    std::enable_if_t<IsCallableAnyReturn<Functor, const std::string&>::value, bool> = true
+                )
+                {
+                    return [object, functor]
+                    (const HeldType&, const std::string& name) {
+                        return object->parent_namespace().object(functor(name));
+                    };
+                }
+        } // namespace getter
+
+        namespace setter {
+            /*
+             * Member function or functor taking a pointer as first argument
+             */
+            template<class HeldType, class Functor, class Arg>
+            auto setter_helper(Functor functor, HeldType& object,
+                               const Object& arg, DummyTuple<Arg>)
+            -> std::enable_if_t<
+                std::is_member_function_pointer<Functor>::value ||
+                IsCallableAnyReturn<Functor, HeldType*, Arg>::value
             >
-            register_read(
-                const ClassWrapper<HeldType>* object,
-                const Functor& functor)
             {
-                return [object, functor](const HeldType& value) {
-                    return object->parent_namespace().object(
-                        std::invoke(functor, &value)
-                    );
-                };
+                return std::invoke(functor, object, arg.cast<Arg>());
             }
 
-        /**
-         * \brief Exposes an arbitraty functon (taking a const reference to the class)
-         * as an attribute of this class
-         */
-        template<class HeldType, class Functor>
-            std::enable_if_t<
-                IsCallableAnyReturn<Functor, const HeldType&>::value,
-                Getter<HeldType>
+            /*
+             * Function object/pointer taking a reference or value as first argument
+             */
+            template<class HeldType, class Functor, class Head, class Arg>
+            auto setter_helper(Functor functor, HeldType& object,
+                             const Object& arg, DummyTuple<Head, Arg>)
+            -> std::enable_if_t<
+                IsCallableAnyReturn<Functor, HeldType&, Arg>::value
             >
-            register_read(
-                const ClassWrapper<HeldType>* object,
-                const Functor& functor)
             {
-                return [object, functor](const HeldType& value) {
-                    return object->parent_namespace().object(functor(value));
-                };
+                return std::invoke(functor, object, arg.cast<Arg>());
             }
 
-        /**
-         * \brief Exposes an arbitraty functon (taking no arguments)
-         * as an attribute of this class
-         */
-        template<class HeldType, class Functor>
-            std::enable_if_t<
-                IsCallableAnyReturn<Functor>::value,
-                Getter<HeldType>
+            /**
+             * Function object/pointer taking at only 1 argument
+             */
+            template<class HeldType, class Functor, class Arg>
+            auto setter_helper(Functor functor, HeldType& object,
+                const Object& arg, DummyTuple<Arg>)
+            -> std::enable_if_t<
+                !std::is_member_function_pointer<Functor>::value
             >
-            register_read(const ClassWrapper<HeldType>* object,
-                          const Functor& functor)
             {
-                return [object, functor](const HeldType&) {
-                    return object->parent_namespace().object(functor());
-                };
+                return std::invoke(functor, arg.cast<Arg>());
             }
 
-        /**
-         * \brief Exposes a fixed value as an attribute of this class
-         */
-        template<class HeldType, class T>
-            std::enable_if_t<
-                !IsCallableAnyReturn<T, const HeldType&>::value &&
-                !IsCallableAnyReturn<T>::value &&
-                !IsCallableAnyReturn<T, const HeldType*>::value &&
-                !std::is_member_pointer<T>::value,
-                Getter<HeldType>
+            template<class HeldType, class Functor>
+                auto register_write(
+                    const ClassWrapper<HeldType>* type,
+                    const Functor& functor)
+                -> std::enable_if_t<
+                    !std::is_member_object_pointer<Functor>::value,
+                    Setter<HeldType>
+                >
+                {
+                    return [type, functor](HeldType& value, const Object& arg) {
+                        using Sig = FunctionSignature<Functor>;
+                        setter_helper<HeldType>(
+                                functor, value, arg,
+                                typename Sig::argument_types_tag()
+                        );
+                    };
+                }
+
+            template<class HeldType, class Type>
+                auto register_write(
+                    const ClassWrapper<HeldType>* type,
+                    Type HeldType::*pointer)
+                -> std::enable_if_t<
+                    !std::is_function<Type>::value,
+                    Setter<HeldType>
+                >
+                {
+                    return [type, pointer](HeldType& value, const Object& arg) {
+                        value.*pointer = arg.cast<Type>();
+                    };
+                }
+
+            /*
+             * Member function or functor taking a pointer as first argument
+             */
+            template<class HeldType, class Functor, class String, class Arg>
+            auto unreg_setter_helper(
+                Functor functor, HeldType& object, const std::string& name,
+                const Object& arg, DummyTuple<String, Arg>)
+            -> std::enable_if_t<
+                std::is_member_function_pointer<Functor>::value ||
+                IsCallableAnyReturn<Functor, HeldType*, std::string, Arg>::value
             >
-            register_read(const ClassWrapper<HeldType>* object,
-                          const T& value)
             {
-                return [object, value](const HeldType&) {
-                    return object->parent_namespace().object(value);
-                };
+                return std::invoke(functor, object, name, arg.cast<Arg>());
             }
 
-
-        /**
-         * \brief Exposes a member function as a fallback getter
-         */
-        template<class HeldType, class Functor>
-            std::enable_if_t<
-                std::is_member_pointer<Functor>::value ||
-                IsCallableAnyReturn<Functor, const HeldType*, const std::string&>::value,
-                UnregGetter<HeldType>
+            /*
+             * Function object/pointer taking a reference or value as first argument
+             */
+            template<class HeldType, class Functor, class Head, class String, class Arg>
+            auto unreg_setter_helper(
+                Functor functor, HeldType& object, const std::string& name,
+                const Object& arg, DummyTuple<Head, String, Arg>)
+            -> std::enable_if_t<
+                IsCallableAnyReturn<Functor, HeldType&, std::string, Arg>::value
             >
-            unreg_getter(
-                const ClassWrapper<HeldType>* object,
-                const Functor& functor)
             {
-                return [object, functor](const HeldType& value, const std::string& name) {
-                    return object->parent_namespace().object(std::invoke(functor, &value, name));
-                };
+                return std::invoke(functor, object, name, arg.cast<Arg>());
             }
 
-        /**
-         * \brief Exposes an arbitraty functon (taking a const reference to the
-         * class and a name as a string) as a fallback getter
-         */
-        template<class HeldType, class Functor>
-            std::enable_if_t<
-                IsCallableAnyReturn<Functor, const HeldType&, const std::string&>::value,
-                UnregGetter<HeldType>
+            /**
+             * Function object/pointer taking at only name and value
+             */
+            template<class HeldType, class Functor, class String, class Arg>
+            auto unreg_setter_helper(
+                Functor functor, HeldType& object,  const std::string& name,
+                const Object& arg, DummyTuple<String, Arg>)
+            -> std::enable_if_t<
+                !std::is_member_function_pointer<Functor>::value
             >
-            unreg_getter(
-                const ClassWrapper<HeldType>* object,
-                const Functor& functor)
             {
-                return [object, functor]
-                (const HeldType& value, const std::string& name) {
-                    return object->parent_namespace().object(functor(value, name));
-                };
+                return std::invoke(functor, name, arg.cast<Arg>());
             }
 
-        /**
-         * \brief Exposes an arbitraty functon (taking a name as a string)
-         * as a fallback getter
-         */
-        template<class HeldType, class Functor>
-            auto unreg_getter(
-                const ClassWrapper<HeldType>* object,
-                const Functor& functor,
-                std::enable_if_t<IsCallableAnyReturn<Functor, const std::string&>::value, bool> = true
-            )
-            {
-                return [object, functor]
-                (const HeldType&, const std::string& name) {
-                    return object->parent_namespace().object(functor(name));
-                };
-            }
-
-        /**
-         * \brief Dummy class to a get compile-time sequence of indices from a parameter pack
-         * \tparam Indices Sequence if indices from 0 to sizeof...(Indices)
-         */
-        template <int... Indices>
-            struct IndexPack {};
-
-        /**
-         * \brief Dummy class that builds an integer pack from a single integer
-         * \tparam N The number which needs to be converted to a pack
-         * \tparam Indices Pack of indices for \c IndexPack, starts out empty
-         *
-         * It expands \p N recursively into an int pack, the last recursive
-         * class inherits IndexPack, which only has the int pack as template
-         * parameter.
-         */
-        template <int N, int... Indices>
-            struct IndexPackBuilder : IndexPackBuilder<N-1, N-1, Indices...> {};
-
-        /**
-        * \brief Termination for \c IndexPackBuilder
-        */
-        template <int... Indices>
-            struct IndexPackBuilder<0, Indices...> : IndexPack<Indices...> {};
+            template<class HeldType, class Functor>
+                auto unreg_setter(
+                    const ClassWrapper<HeldType>* type,
+                    const Functor& functor)
+                -> UnregSetter<HeldType>
+                {
+                    return [type, functor](HeldType& object, const std::string& name, const Object& arg) {
+                        using Sig = FunctionSignature<Functor>;
+                        unreg_setter_helper<HeldType>(
+                            functor, object, name, arg,
+                            typename Sig::argument_types_tag()
+                        );
+                    };
+                }
+        } // namespace setter
 
         namespace function {
+            /**
+             * \brief Dummy class to a get compile-time sequence of indices from a parameter pack
+             * \tparam Indices Sequence if indices from 0 to sizeof...(Indices)
+             */
+            template <int... Indices>
+                struct IndexPack {};
+
+            /**
+             * \brief Dummy class that builds an integer pack from a single integer
+             * \tparam N The number which needs to be converted to a pack
+             * \tparam Indices Pack of indices for \c IndexPack, starts out empty
+             *
+             * It expands \p N recursively into an int pack, the last recursive
+             * class inherits IndexPack, which only has the int pack as template
+             * parameter.
+             */
+            template <int N, int... Indices>
+                struct IndexPackBuilder : IndexPackBuilder<N-1, N-1, Indices...> {};
+
+            /**
+            * \brief Termination for \c IndexPackBuilder
+            */
+            template <int... Indices>
+                struct IndexPackBuilder<0, Indices...> : IndexPack<Indices...> {};
+
             /*
              * Member function or functor taking a pointer as first argument
              */
@@ -746,6 +987,7 @@ namespace wrapper {
                     throw FunctionError("Wrong number of arguments");
                 return std::invoke(functor, args[0].cast<Head>(), args[Indices].cast<Args>()...);
             }
+
             /**
              * Function object/pointer taking at least 1 argument
              */
@@ -795,7 +1037,7 @@ namespace wrapper {
     template<class T>
         ClassWrapper<Class>& ClassWrapper<Class>::add_readonly(const std::string& name, const T& value)
         {
-            getters[name] = detail::register_read<HeldType>(this, value);
+            getters[name] = detail::getter::register_read<HeldType>(this, value);
             return *this;
         }
 
@@ -804,7 +1046,7 @@ namespace wrapper {
     template<class T>
         ClassWrapper<Class>& ClassWrapper<Class>::fallback_getter(const T& functor)
         {
-            _fallback_getter = detail::unreg_getter<HeldType>(this, functor);
+            _fallback_getter = detail::getter::unreg_getter<HeldType>(this, functor);
             return *this;
         }
 
@@ -812,11 +1054,28 @@ namespace wrapper {
     template<class T>
         ClassWrapper<Class>& ClassWrapper<Class>::add_method(const std::string& name, const T& value)
         {
-            /// \todo Could keep const-correctness
-            using namespace detail::function;
-            methods[name] = wrap_functor<HeldType>(this, name, value);
+            methods[name] = detail::function::wrap_functor<HeldType>(this, name, value);
             return *this;
         }
+
+    template<class Class>
+    template<class Read, class Write>
+        ClassWrapper<Class>& ClassWrapper<Class>::add_readwrite(
+            const std::string& name, const Read& read, const Write& write)
+        {
+            getters[name] = detail::getter::register_read<HeldType>(this, read);
+            setters[name] = detail::setter::register_write<HeldType>(this, write);
+            return *this;
+        }
+
+    template<class Class>
+    template<class T>
+        ClassWrapper<Class>& ClassWrapper<Class>::fallback_setter(const T& functor)
+        {
+            _fallback_setter = detail::setter::unreg_setter<HeldType>(this, functor);
+            return *this;
+        }
+
 } // namespace wrapper
 
 template<class T>

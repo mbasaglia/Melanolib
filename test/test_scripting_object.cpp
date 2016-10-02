@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE( test_to_string )
     BOOST_CHECK_EQUAL( ns.object(SomeClass()).to_string(), "SomeClass" );
 }
 
-BOOST_AUTO_TEST_CASE( test_member_access )
+BOOST_AUTO_TEST_CASE( test_getter )
 {
     Namespace ns;
     ns.register_type<SomeClass>("SomeClass")
@@ -334,4 +334,127 @@ BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noobject )
     BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), FunctionError);
     BOOST_CHECK_EQUAL( object.call("lambda_arg", {arg}).to_string(), "foo");
     BOOST_CHECK_EQUAL( object.call("fnptr", {arg}).to_string(), "foofoo");
+}
+
+struct SettableClass
+{
+    std::string attribute = "value";
+
+    std::string getter() const
+    {
+        return attribute;
+    }
+
+    void setter(const std::string& value)
+    {
+        attribute = value + "(setter)";
+    }
+};
+
+BOOST_AUTO_TEST_CASE( test_setter )
+{
+    std::string other_value;
+    Namespace ns;
+    ns.register_type<SettableClass>()
+        .add_readwrite("attribute", &SettableClass::attribute)
+        .add_readwrite("property", &SettableClass::getter, &SettableClass::setter)
+        .add_readwrite("external", &SettableClass::getter,
+            [](SettableClass& obj, const std::string& value) {
+                obj.attribute = value + "(lambda)";
+        })
+        .add_readwrite("unbound",
+            [&other_value]() { return other_value; },
+            [&other_value](const std::string& value) { other_value = value; }
+        )
+    ;
+    ns.register_type<std::string>();
+    ns.register_type<int>();
+
+    auto object = ns.object(SettableClass());
+    BOOST_CHECK_EQUAL( object.get({"attribute"}).to_string(), "value" );
+    object.set({"attribute"}, ns.object<std::string>("foo"));
+    BOOST_CHECK_EQUAL( object.get({"attribute"}).to_string(), "foo" );
+    BOOST_CHECK_EQUAL( object.get({"property"}).to_string(), "foo" );
+    object.set({"property"}, ns.object<std::string>("bar"));
+    BOOST_CHECK_EQUAL( object.get({"property"}).to_string(), "bar(setter)" );
+    object.set({"external"}, ns.object<std::string>("foo"));
+    BOOST_CHECK_EQUAL( object.get({"external"}).to_string(), "foo(lambda)" );
+
+    object.set({"unbound"}, ns.object<std::string>("bar"));
+    BOOST_CHECK_EQUAL( object.get({"external"}).to_string(), "foo(lambda)" );
+    BOOST_CHECK_EQUAL( object.get({"unbound"}).to_string(), "bar" );
+    BOOST_CHECK_EQUAL( other_value, "bar" );
+
+    BOOST_CHECK_THROW( object.set({"attribute"}, ns.object<int>(1)), TypeError );
+    BOOST_CHECK_THROW( object.set({"property"},  ns.object<int>(1)), TypeError );
+    BOOST_CHECK_THROW( object.set({"external"}, ns.object<int>(1)), TypeError );
+    BOOST_CHECK_THROW( object.set({"unbound"},  ns.object<int>(1)), TypeError );
+    BOOST_CHECK_THROW( object.set({"not_found"}, ns.object<int>(1)), MemberNotFound );
+}
+
+struct FallbackClass
+{
+    void set(const std::string& name, const std::string& value)
+    {
+        attrs[name] = value;
+    }
+
+    std::string get(const std::string& name) const
+    {
+        return attrs.at(name);
+    }
+
+    std::unordered_map<std::string, std::string> attrs;
+};
+
+BOOST_AUTO_TEST_CASE( test_fallback_setter_member )
+{
+    Namespace ns;
+    ns.register_type<FallbackClass>()
+        .fallback_getter(&FallbackClass::get)
+        .fallback_setter(&FallbackClass::set)
+    ;
+    ns.register_type<std::string>();
+
+    auto object = ns.object(FallbackClass());
+    object.set("foo", ns.object<std::string>("bar"));
+    BOOST_CHECK_EQUAL( object.get("foo").to_string(), "bar" );
+}
+
+BOOST_AUTO_TEST_CASE( test_fallback_setter_functor )
+{
+    std::unordered_map<std::string, std::string> map;
+    Namespace ns;
+    ns.register_type<SomeClass>()
+        .add_readonly("data", &SomeClass::data_member)
+        .fallback_setter(
+            [&map](const SomeClass& obj, const std::string& name, const std::string& value){
+                map[name] = obj.data_member + value;
+        })
+    ;
+    ns.register_type<std::string>();
+
+    auto object = ns.object(SomeClass());
+    BOOST_CHECK_EQUAL( object.get({"data"}).to_string(), "data member" );
+    object.set("foo", ns.object<std::string>("bar"));
+    BOOST_CHECK_EQUAL( map["foo"], "data memberbar" );
+}
+
+BOOST_AUTO_TEST_CASE( test_fallback_setter_functor_no_object )
+{
+    std::unordered_map<std::string, std::string> map;
+    Namespace ns;
+    ns.register_type<SomeClass>()
+        .add_readonly("data", &SomeClass::data_member)
+        .fallback_setter(
+            [&map](const std::string& name, const std::string& value){
+                map[name] = value;
+        })
+    ;
+    ns.register_type<std::string>();
+
+    auto object = ns.object(SomeClass());
+    BOOST_CHECK_EQUAL( object.get({"data"}).to_string(), "data member" );
+    object.set("foo", ns.object<std::string>("bar"));
+    BOOST_CHECK_EQUAL( map["foo"], "bar" );
 }
