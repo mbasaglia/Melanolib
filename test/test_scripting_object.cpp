@@ -335,19 +335,3 @@ BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noobject )
     BOOST_CHECK_EQUAL( object.call("lambda_arg", {arg}).to_string(), "foo");
     BOOST_CHECK_EQUAL( object.call("fnptr", {arg}).to_string(), "foofoo");
 }
-
-BOOST_AUTO_TEST_CASE( test_callable )
-{
-    /// \todo Overloads to pass by value
-    Namespace ns;
-    ns.register_type<int>()
-        .make_callable([](int i) {
-            return i * 10;
-        })
-    ;
-    ns.register_type<float>();
-
-    BOOST_CHECK_EQUAL( ns.object(2).invoke({}).to_string(), "20");
-    BOOST_CHECK_THROW( ns.object(2.f).invoke({}).to_string(), MemberNotFound);
-
-}

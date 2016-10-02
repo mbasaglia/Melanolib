@@ -158,15 +158,6 @@ public:
     }
 
     /**
-     * \brief Invokes as a function
-     * \throws MemberNotFound or TypeError
-     */
-    Object invoke(const Arguments& args) const
-    {
-        return call({}, args);
-    }
-
-    /**
      * \brief Returns a string representing the contained object
      */
     std::string to_string() const
@@ -291,8 +282,8 @@ namespace wrapper {
          * \tparam T can be:
          * * A pointer to a data/function member of HeldType
          * * Any function object taking no arguments
-         * * Any function object taking a const HeldType& argument
-         * * Any other type registered to the parent namespace
+         * * Any function object taking a const HeldType& or a const HeldType* argument
+         * * Any other object of a type registered to the parent namespace
          */
         template<class T>
             ClassWrapper& add_readonly(const std::string& name, const T& value);
@@ -304,6 +295,7 @@ namespace wrapper {
          * \tparam T can be:
          * * A pointer to a function member of HeldType taking a const std::string&
          * * Any function object taking a const HeldType& and a const std::string&
+         * * Any function object taking a const HeldType* and a const std::string&
          * * Any function object taking a const std::string&
          */
         template<class T>
@@ -311,28 +303,12 @@ namespace wrapper {
 
         /**
          * \brief Exposes a member function
-         * \tparam T can be:
-         * * A pointer to a function member of HeldType
-         * * Any function object, the first argument must be a reference to HeldType
-         *   (Either const or not)
+         * \tparam T can be any function object or pointer.
+         * If the first argument is convertible from a pointer or reference
+         * to HeldType, the owning object will be passed.
          */
         template<class T>
             ClassWrapper& add_method(const std::string& name, const T& value);
-
-        /**
-         * \brief Allows class objects to act as a functions
-         * \tparam T can be:
-         * * A pointer to a function member of HeldType
-         * * Any function object, the first argument must be one of the following:
-         *      * const HeldType&
-         *      * HeldType&
-         *      * HeldType
-         */
-        template<class T>
-            ClassWrapper& make_callable(const T& value)
-            {
-                return add_method("", value);
-            }
 
         const std::type_info& type_info() const noexcept override
         {
