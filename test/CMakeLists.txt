@@ -1,6 +1,6 @@
 include(CTest)
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address --coverage -O0 -fno-inline")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined -fsanitize=address --coverage -O0 -fno-inline")
 
 # Boost
 set(Boost_FOUND ON)
