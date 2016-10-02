@@ -85,6 +85,11 @@ namespace wrapper {
          */
         virtual Object call_method(const std::string& name, const std::vector<Object>& args) = 0;
 
+        /**
+         * \brief Converts to an object of a different type
+         */
+        virtual Object converted(const std::type_info& type) const = 0;
+
     private:
         const TypeWrapper* _type;
     };
@@ -100,7 +105,6 @@ public:
         : runtime_error(message)
     {}
 };
-
 
 /**
  * \brief Exception thrown when passing bad parameters to a function
@@ -198,11 +202,48 @@ public:
         return value->to_string();
     }
 
+    /**
+     * \brief Cast to a reference of the contained type
+     * \throws TypeError if the type doesn't match
+     */
     template<class T>
     const T& cast() const;
 
+    /**
+     * \brief Whether it's safe to call cast<T>()
+     */
     template<class T>
     bool has_type() const;
+
+    /**
+     * \brief Convert the internal representation using its type registered conversions
+     * \throw MemberNotFound if the conversion is not available
+     */
+    template<class T>
+    Object& convert()
+    {
+        *this = converted<T>();
+        return *this;
+    }
+
+    /**
+     * \brief Returns an object with the internal representation converted
+     * using this object's type registered conversions
+     * \throw MemberNotFound if the conversion is not available
+     */
+    template<class T>
+    Object converted() const;
+
+    /**
+     * \brief Performs conversion and the cast()
+     * \note This returns a copy of the returned value,
+     * use convert() or converted() followed by a cast() if you require a reference
+     */
+    template<class T>
+    T converted_cast() const
+    {
+        return converted<T>().cast<T>();
+    }
 
 private:
     template<class Iter>
@@ -313,6 +354,9 @@ namespace wrapper {
         template<class HeldType>
             using Constructor = std::function<Object(const Object::Arguments&)>;
 
+        template<class HeldType>
+            using ConverterMap = std::unordered_map<std::type_index, Getter<HeldType>>;
+
     } // namespace detail
 
     /**
@@ -415,6 +459,18 @@ namespace wrapper {
         template<class... Args>
             ClassWrapper& constructor();
 
+        /**
+         * \brief Exposes a conversion operator
+         * \tparam Functor can be:
+         * * A pointer to a data member of HeldType
+         * * A pointer to a member function of HeldType taking no arguments
+         * * Any function object taking no arguments
+         * * Any function object taking a const HeldType& or a const HeldType* argument
+         * * Any other object of a type registered to the parent namespace
+         */
+        template<class Target, class Functor>
+            ClassWrapper& conversion(const Functor& functor);
+
         const std::type_info& type_info() const noexcept override
         {
             return typeid(HeldType);
@@ -481,6 +537,22 @@ namespace wrapper {
          */
         Object make_object(const Object::Arguments& arguments) const override;
 
+        /**
+         * \brief Returns an Object with a converted type
+         * \throws MemberNotFound if \p name is not something registered
+         * with conversion()
+         */
+        Object convert(const HeldType& owner, const std::type_info& type) const
+        {
+            auto iter = converters.find(type);
+            if ( iter == converters.end() )
+            {
+                throw MemberNotFound("Cannot convert " + name() + " to " +
+                    parent_namespace().type_name(type));
+            }
+            return iter->second(owner);
+        }
+
     private:
         detail::GetterMap<HeldType> getters;
         detail::UnregGetter<HeldType> _fallback_getter;
@@ -488,6 +560,7 @@ namespace wrapper {
         detail::SetterMap<HeldType> setters;
         detail::UnregSetter<HeldType> _fallback_setter;
         detail::Constructor<HeldType> _constructor;
+        detail::ConverterMap<HeldType> converters;
     };
 
 } // namespace wrapper
@@ -577,6 +650,11 @@ namespace wrapper {
             return class_wrapper().call_method(value.get(), name, args);
         }
 
+        Object converted(const std::type_info& type) const override
+        {
+            return class_wrapper().convert(value.get(), type);
+        }
+
     private:
         ValueHolder<Class> value;
     };
@@ -664,12 +742,17 @@ public:
     template<class T>
     std::string type_name(bool throw_on_error = false) const
     {
-        auto iter = classes.find(typeid(T));
+        return type_name(typeid(T), throw_on_error);
+    }
+
+    std::string type_name(const std::type_info& type, bool throw_on_error = false) const
+    {
+        auto iter = classes.find(type);
         if ( iter == classes.end() )
         {
             if ( throw_on_error )
                 throw TypeError("Unregistered type");
-            return typeid(T).name();
+            return type.name();
         }
         return iter->second->name();
     }
@@ -693,7 +776,7 @@ namespace wrapper {
                     IsCallableAnyReturn<Functor, const HeldType*>::value,
                     Getter<HeldType>
                 >
-                register_read(
+                wrap_getter(
                     const ClassWrapper<HeldType>* object,
                     const Functor& functor)
                 {
@@ -713,7 +796,7 @@ namespace wrapper {
                     IsCallableAnyReturn<Functor, const HeldType&>::value,
                     Getter<HeldType>
                 >
-                register_read(
+                wrap_getter(
                     const ClassWrapper<HeldType>* object,
                     const Functor& functor)
                 {
@@ -731,7 +814,7 @@ namespace wrapper {
                     IsCallableAnyReturn<Functor>::value,
                     Getter<HeldType>
                 >
-                register_read(const ClassWrapper<HeldType>* object,
+                wrap_getter(const ClassWrapper<HeldType>* object,
                               const Functor& functor)
                 {
                     return [object, functor](const HeldType&) {
@@ -750,7 +833,7 @@ namespace wrapper {
                     !std::is_member_pointer<T>::value,
                     Getter<HeldType>
                 >
-                register_read(const ClassWrapper<HeldType>* object,
+                wrap_getter(const ClassWrapper<HeldType>* object,
                               const T& value)
                 {
                     return [object, value](const HeldType&) {
@@ -856,7 +939,7 @@ namespace wrapper {
             }
 
             template<class HeldType, class Functor>
-                auto register_write(
+                auto wrap_setter(
                     const ClassWrapper<HeldType>* type,
                     const Functor& functor)
                 -> std::enable_if_t<
@@ -874,7 +957,7 @@ namespace wrapper {
                 }
 
             template<class HeldType, class Type>
-                auto register_write(
+                auto wrap_setter(
                     const ClassWrapper<HeldType>* type,
                     Type HeldType::*pointer)
                 -> std::enable_if_t<
@@ -1091,7 +1174,7 @@ namespace wrapper {
              * Constructor
              */
             template<class HeldType, class... Args, std::size_t... Indices>
-            HeldType ctor_helper_direct(
+            HeldType ctor_helper(
                 const Object::Arguments& args,
                 std::index_sequence<Indices...>)
             {
@@ -1108,7 +1191,7 @@ namespace wrapper {
             {
                 return [type](const Object::Arguments& args) {
                     return type->parent_namespace().object(
-                        ctor_helper_direct<HeldType, Args...>(
+                        ctor_helper<HeldType, Args...>(
                             args,
                             std::make_index_sequence<sizeof...(Args)>()
                         )
@@ -1124,7 +1207,7 @@ namespace wrapper {
     template<class T>
         ClassWrapper<Class>& ClassWrapper<Class>::add_readonly(const std::string& name, const T& value)
         {
-            getters[name] = detail::getter::register_read<HeldType>(this, value);
+            getters[name] = detail::getter::wrap_getter<HeldType>(this, value);
             return *this;
         }
 
@@ -1150,8 +1233,8 @@ namespace wrapper {
         ClassWrapper<Class>& ClassWrapper<Class>::add_readwrite(
             const std::string& name, const Read& read, const Write& write)
         {
-            getters[name] = detail::getter::register_read<HeldType>(this, read);
-            setters[name] = detail::setter::register_write<HeldType>(this, write);
+            getters[name] = detail::getter::wrap_getter<HeldType>(this, read);
+            setters[name] = detail::setter::wrap_setter<HeldType>(this, write);
             return *this;
         }
 
@@ -1187,6 +1270,14 @@ namespace wrapper {
         return _constructor(arguments);
     }
 
+    template<class Class>
+    template<class Target, class Functor>
+        ClassWrapper<Class>& ClassWrapper<Class>::conversion(const Functor& functor)
+        {
+            converters[typeid(Target)] = detail::getter::wrap_getter(this, functor);
+            return *this;
+        }
+
 } // namespace wrapper
 
 template<class T>
@@ -1202,6 +1293,18 @@ const T& Object::cast() const
     );
 }
 
+template<>
+const Object& Object::cast<const Object&>() const
+{
+    return *this;
+}
+
+template<>
+const Object& Object::cast<Object>() const
+{
+    return *this;
+}
+
 template<class T>
 bool Object::has_type() const
 {
@@ -1209,6 +1312,30 @@ bool Object::has_type() const
     using Type = std::decay_t<T>;
     return dynamic_cast<wrapper::ObjectWrapper<Type>*>(value.get());
 }
+
+
+template<class T>
+Object Object::converted() const
+{
+    /// \todo Allow binding references
+    using Type = std::decay_t<T>;
+    if ( has_type<T>() )
+        return *this;
+    return value->converted(typeid(Type));
+}
+
+template<>
+Object Object::converted<Object>() const
+{
+    return *this;
+}
+
+template<>
+Object Object::converted<const Object&>() const
+{
+    return *this;
+}
+
 
 
 } // namespace scripting
