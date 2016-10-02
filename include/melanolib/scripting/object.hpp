@@ -471,6 +471,18 @@ namespace wrapper {
         template<class Target, class Functor>
             ClassWrapper& conversion(const Functor& functor);
 
+        /**
+         * \brief Exposes a conversion operator
+         * \tparam Functor can be:
+         * * A pointer to a data member of HeldType
+         * * A pointer to a member function of HeldType taking no arguments
+         * * Any function object taking no arguments
+         * * Any function object taking a const HeldType& or a const HeldType* argument
+         * * Any other object of a type registered to the parent namespace
+         */
+        template<class Functor>
+            ClassWrapper& conversion(const Functor& functor);
+
         const std::type_info& type_info() const noexcept override
         {
             return typeid(HeldType);
@@ -768,7 +780,7 @@ namespace wrapper {
         namespace getter {
 
             /**
-             * \brief Exposes a data memeber as an attribute of this class
+             * Member pointer or function taking a const HeldType*
              */
             template<class HeldType, class Functor>
                 std::enable_if_t<
@@ -786,10 +798,18 @@ namespace wrapper {
                         );
                     };
                 }
+            template<class HeldType, class Functor>
+                auto wrap_getter_type(
+                    const ClassWrapper<HeldType>* object,
+                    const Functor& functor)
+                -> std::enable_if_t<
+                    std::is_member_pointer<Functor>::value ||
+                    IsCallableAnyReturn<Functor, const HeldType*>::value,
+                    decltype(std::invoke(functor, &std::declval<HeldType>()))
+                >;
 
             /**
-             * \brief Exposes an arbitraty functon (taking a const reference to the class)
-             * as an attribute of this class
+             * Functon taking a const reference to the class
              */
             template<class HeldType, class Functor>
                 std::enable_if_t<
@@ -804,10 +824,17 @@ namespace wrapper {
                         return object->parent_namespace().object(functor(value));
                     };
                 }
+            template<class HeldType, class Functor>
+                auto wrap_getter_type(
+                    const ClassWrapper<HeldType>* object,
+                    const Functor& functor)
+                -> std::enable_if_t<
+                    IsCallableAnyReturn<Functor, const HeldType&>::value,
+                    decltype(functor(std::declval<HeldType>()))
+                >;
 
             /**
-             * \brief Exposes an arbitraty functon (taking no arguments)
-             * as an attribute of this class
+             * Arbitraty functon taking no arguments
              */
             template<class HeldType, class Functor>
                 std::enable_if_t<
@@ -815,15 +842,24 @@ namespace wrapper {
                     Getter<HeldType>
                 >
                 wrap_getter(const ClassWrapper<HeldType>* object,
-                              const Functor& functor)
+                            const Functor& functor)
                 {
                     return [object, functor](const HeldType&) {
                         return object->parent_namespace().object(functor());
                     };
                 }
+            template<class HeldType, class Functor>
+                auto wrap_getter_type(
+                    const ClassWrapper<HeldType>* object,
+                    const Functor& functor)
+                -> std::enable_if_t<
+                    IsCallableAnyReturn<Functor>::value,
+                    decltype(functor())
+                >
+                {}
 
             /**
-             * \brief Exposes a fixed value as an attribute of this class
+             * Fixed value
              */
             template<class HeldType, class T>
                 std::enable_if_t<
@@ -840,6 +876,17 @@ namespace wrapper {
                         return object->parent_namespace().object(value);
                     };
                 }
+            template<class HeldType, class T>
+                std::enable_if_t<
+                    !IsCallableAnyReturn<T, const HeldType&>::value &&
+                    !IsCallableAnyReturn<T>::value &&
+                    !IsCallableAnyReturn<T, const HeldType*>::value &&
+                    !std::is_member_pointer<T>::value,
+                    T
+                >
+                wrap_getter_type(
+                    const ClassWrapper<HeldType>* object,
+                    const T& value);
 
 
             /**
@@ -1276,6 +1323,14 @@ namespace wrapper {
         {
             converters[typeid(Target)] = detail::getter::wrap_getter(this, functor);
             return *this;
+        }
+
+    template<class Class>
+    template<class Functor>
+        ClassWrapper<Class>& ClassWrapper<Class>::conversion(const Functor& functor)
+        {
+            using Target = std::decay_t<decltype(detail::getter::wrap_getter_type(this, functor))>;
+            return conversion<Target, Functor>(functor);
         }
 
 } // namespace wrapper

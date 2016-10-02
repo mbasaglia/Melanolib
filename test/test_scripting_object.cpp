@@ -525,7 +525,7 @@ BOOST_AUTO_TEST_CASE( test_constructor_raw )
     BOOST_CHECK_THROW( ns.object("Constructible", {ns.object(1)}), TypeError );
 }
 
-BOOST_AUTO_TEST_CASE( test_converter )
+BOOST_AUTO_TEST_CASE( test_converter_explicit )
 {
     Namespace ns;
     ns.register_type<int>()
@@ -541,3 +541,21 @@ BOOST_AUTO_TEST_CASE( test_converter )
     BOOST_CHECK_CLOSE( object.converted_cast<float>(), 1234.f, 0.0001 );
     BOOST_CHECK_THROW( object.converted_cast<double>(), MemberNotFound );
 }
+
+BOOST_AUTO_TEST_CASE( test_converter_implicit )
+{
+    Namespace ns;
+    ns.register_type<int>()
+        .conversion([](int i) -> float { return i; })
+    ;
+    ns.register_type<float>();
+    ns.register_type<double>();
+
+    auto object = ns.object(1234);
+    BOOST_CHECK_EQUAL( object.cast<int>(), 1234 );
+    BOOST_CHECK_THROW( object.cast<float>(), TypeError );
+    BOOST_CHECK_EQUAL( object.converted_cast<int>(), 1234 );
+    BOOST_CHECK_CLOSE( object.converted_cast<float>(), 1234.f, 0.0001 );
+    BOOST_CHECK_THROW( object.converted_cast<double>(), MemberNotFound );
+}
+
