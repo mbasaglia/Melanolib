@@ -708,12 +708,8 @@ namespace wrapper {
             struct IndexPackBuilder<0, Indices...> : IndexPack<Indices...> {};
 
         namespace function {
-            /** Member function or functor taking a pointer as first argument
-             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
-             * \tparam HeldType     Class for the member function
-             * \tparam Ret          Return type
-             * \tparam Args         Function parameter types
-             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
+            /*
+             * Member function or functor taking a pointer as first argument
              */
             template<class HeldType, class Ret, class Functor, class... Args, int... Indices>
             auto call_helper(
@@ -733,13 +729,8 @@ namespace wrapper {
                 return std::invoke(functor, object, args[Indices].cast<Args>()...);
             }
 
-            /** Function object/pointer taking a reference or value as first argument
-             * \brief Helper for \c wrap_functor(), uses the \c IndexPack to extract the arguments
-             * \tparam HeldType     Class for the member function
-             * \tparam Functor      Functor type
-             * \tparam Ret          Return type
-             * \tparam Args         Function parameter types
-             * \tparam Indices      Pack of indices for \c Args, deduced by the dummy parameter
+            /*
+             * Function object/pointer taking a reference or value as first argument
              */
             template<class HeldType, class Ret, class Functor, class Head, class... Args, int... Indices>
             auto call_helper(
@@ -756,6 +747,47 @@ namespace wrapper {
                 if ( args.size() != sizeof...(Args) )
                     throw FunctionError("Wrong number of arguments");
                 return std::invoke(functor, object, args[Indices-1].cast<Args>()...);
+            }
+
+            /**
+             * Function object/pointer taking at least 1 argument
+             */
+            template<class HeldType, class Ret, class Functor, class Head, class... Args, int... Indices>
+            auto call_helper(
+                Functor functor,
+                HeldType& object,
+                const Object::Arguments& args,
+                DummyTuple<Head, Args...>,
+                IndexPack<0, Indices...>)
+            -> std::enable_if_t<
+                !std::is_member_function_pointer<Functor>::value &&
+                !std::is_convertible<HeldType&, Head>::value &&
+                !std::is_convertible<HeldType*, Head>::value,
+                Ret
+            >
+            {
+                if ( args.size() != sizeof...(Args) + 1 )
+                    throw FunctionError("Wrong number of arguments");
+                return std::invoke(functor, args[0].cast<Head>(), args[Indices].cast<Args>()...);
+            }
+            /**
+             * Function object/pointer taking at least 1 argument
+             */
+            template<class HeldType, class Ret, class Functor>
+            auto call_helper(
+                Functor functor,
+                HeldType& object,
+                const Object::Arguments& args,
+                DummyTuple<>,
+                IndexPack<>)
+            -> std::enable_if_t<
+                !std::is_member_function_pointer<Functor>::value,
+                Ret
+            >
+            {
+                if ( args.size() != 0 )
+                    throw FunctionError("Wrong number of arguments");
+                return std::invoke(functor);
             }
 
             /** Member function

@@ -308,6 +308,34 @@ BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noconst )
     BOOST_CHECK_EQUAL( object.call("fnptr", {arg}).to_string(), "data memberfoo");
 }
 
+std::string function_noobject(const std::string& arg)
+{
+    return arg + arg;
+}
+
+BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noobject )
+{
+    Namespace ns;
+    ns.register_type<SomeClass>()
+        .add_method("lambda_noargs", []() {
+            return std::string("noargs");
+        })
+        .add_method("lambda_arg", [](const std::string& arg) {
+            return arg;
+        })
+        .add_method("fnptr", &function_noobject)
+    ;
+    ns.register_type<std::string>();
+
+    Object object = ns.object(SomeClass());
+    BOOST_CHECK_EQUAL( object.call("lambda_noargs", {}).to_string(), "noargs");
+    BOOST_CHECK_THROW( object.call("lambda_arg", {}).to_string(), FunctionError);
+    Object arg = ns.object<std::string>("foo");
+    BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), FunctionError);
+    BOOST_CHECK_EQUAL( object.call("lambda_arg", {arg}).to_string(), "foo");
+    BOOST_CHECK_EQUAL( object.call("fnptr", {arg}).to_string(), "foofoo");
+}
+
 BOOST_AUTO_TEST_CASE( test_callable )
 {
     /// \todo Overloads to pass by value
