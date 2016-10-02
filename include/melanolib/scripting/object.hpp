@@ -27,6 +27,7 @@
 #include <unordered_map>
 #include <memory>
 #include <sstream>
+#include <utility>
 
 #include "melanolib/utils/type_utils.hpp"
 #include "melanolib/utils/c++-compat.hpp"
@@ -939,41 +940,16 @@ namespace wrapper {
         } // namespace setter
 
         namespace function {
-            /**
-             * \brief Dummy class to a get compile-time sequence of indices from a parameter pack
-             * \tparam Indices Sequence if indices from 0 to sizeof...(Indices)
-             */
-            template <int... Indices>
-                struct IndexPack {};
-
-            /**
-             * \brief Dummy class that builds an integer pack from a single integer
-             * \tparam N The number which needs to be converted to a pack
-             * \tparam Indices Pack of indices for \c IndexPack, starts out empty
-             *
-             * It expands \p N recursively into an int pack, the last recursive
-             * class inherits IndexPack, which only has the int pack as template
-             * parameter.
-             */
-            template <int N, int... Indices>
-                struct IndexPackBuilder : IndexPackBuilder<N-1, N-1, Indices...> {};
-
-            /**
-            * \brief Termination for \c IndexPackBuilder
-            */
-            template <int... Indices>
-                struct IndexPackBuilder<0, Indices...> : IndexPack<Indices...> {};
-
             /*
              * Member function or functor taking a pointer as first argument
              */
-            template<class HeldType, class Ret, class Functor, class... Args, int... Indices>
+            template<class HeldType, class Ret, class Functor, class... Args, std::size_t... Indices>
             auto call_helper(
                 Functor functor,
                 HeldType& object,
                 const Object::Arguments& args,
                 DummyTuple<Args...>,
-                IndexPack<Indices...>)
+                std::index_sequence<Indices...>)
             -> std::enable_if_t<
                 std::is_member_function_pointer<Functor>::value ||
                 IsCallableAnyReturn<Functor, HeldType*, Args...>::value,
@@ -988,13 +964,13 @@ namespace wrapper {
             /*
              * Function object/pointer taking a reference or value as first argument
              */
-            template<class HeldType, class Ret, class Functor, class Head, class... Args, int... Indices>
+            template<class HeldType, class Ret, class Functor, class Head, class... Args, std::size_t... Indices>
             auto call_helper(
                 Functor functor,
                 HeldType& object,
                 const Object::Arguments& args,
                 DummyTuple<Head, Args...>,
-                IndexPack<0, Indices...>)
+                std::index_sequence<0, Indices...>)
             -> std::enable_if_t<
                 IsCallableAnyReturn<Functor, HeldType&, Args...>::value,
                 Ret
@@ -1008,13 +984,13 @@ namespace wrapper {
             /**
              * Function object/pointer taking at least 1 argument
              */
-            template<class HeldType, class Ret, class Functor, class Head, class... Args, int... Indices>
+            template<class HeldType, class Ret, class Functor, class Head, class... Args, std::size_t... Indices>
             auto call_helper(
                 Functor functor,
                 HeldType& object,
                 const Object::Arguments& args,
                 DummyTuple<Head, Args...>,
-                IndexPack<0, Indices...>)
+                std::index_sequence<0, Indices...>)
             -> std::enable_if_t<
                 !std::is_member_function_pointer<Functor>::value &&
                 !std::is_convertible<HeldType&, Head>::value &&
@@ -1036,7 +1012,7 @@ namespace wrapper {
                 HeldType& object,
                 const Object::Arguments& args,
                 DummyTuple<>,
-                IndexPack<>)
+                std::index_sequence<>)
             -> std::enable_if_t<
                 !std::is_member_function_pointer<Functor>::value,
                 Ret
@@ -1062,7 +1038,7 @@ namespace wrapper {
                         call_helper<HeldType, typename Sig::return_type>(
                             functor, value, args,
                             typename Sig::argument_types_tag(),
-                            IndexPackBuilder<Sig::argument_count>()
+                            std::make_index_sequence<Sig::argument_count>()
                         )
                     );
                 };
@@ -1071,12 +1047,12 @@ namespace wrapper {
             /**
              * Function object/pointer
              */
-            template<class HeldType, class Functor, class... Args, int... Indices>
+            template<class HeldType, class Functor, class... Args, std::size_t... Indices>
             HeldType ctor_helper(
                 Functor functor,
                 const Object::Arguments& args,
                 DummyTuple<Args...>,
-                IndexPack<Indices...>)
+                std::index_sequence<Indices...>)
             {
                 if ( args.size() != sizeof...(Args) )
                     throw FunctionError("Wrong number of arguments");
@@ -1098,7 +1074,7 @@ namespace wrapper {
                         ctor_helper<HeldType>(
                             functor, args,
                             typename Sig::argument_types_tag(),
-                            IndexPackBuilder<Sig::argument_count>()
+                            std::make_index_sequence<Sig::argument_count>()
                         )
                     );
                 };
