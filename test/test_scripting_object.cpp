@@ -479,8 +479,8 @@ BOOST_AUTO_TEST_CASE( test_constructor_functor )
 
     auto param = ns.object<std::string>("foo");
     BOOST_CHECK_EQUAL( ns.object("Constructible", {param}).get({"data"}).to_string(), "foo" );
-    BOOST_CHECK_THROW( ns.object("Constructible", {param, param}), FunctionError );
-    BOOST_CHECK_THROW( ns.object("Constructible", {ns.object(1)}), TypeError );
+    BOOST_CHECK_THROW( ns.object("Constructible", {param, param}), MemberNotFound );
+    BOOST_CHECK_THROW( ns.object("Constructible", {ns.object(1)}), MemberNotFound );
 }
 
 BOOST_AUTO_TEST_CASE( test_no_constructor )
@@ -521,8 +521,30 @@ BOOST_AUTO_TEST_CASE( test_constructor_raw )
 
     auto param = ns.object<std::string>("foo");
     BOOST_CHECK_EQUAL( ns.object("Constructible", {param}).get({"data"}).to_string(), "foo" );
-    BOOST_CHECK_THROW( ns.object("Constructible", {param, param}), FunctionError );
-    BOOST_CHECK_THROW( ns.object("Constructible", {ns.object(1)}), TypeError );
+    BOOST_CHECK_THROW( ns.object("Constructible", {param, param}), MemberNotFound );
+    BOOST_CHECK_THROW( ns.object("Constructible", {ns.object(1)}), MemberNotFound );
+}
+
+BOOST_AUTO_TEST_CASE( test_constructor_overload )
+{
+    Namespace ns;
+    ns.register_type<Constructible>("Constructible")
+        .add_readonly("data", &Constructible::data)
+        .constructor([](const std::string& data){
+            return Constructible(data);
+        })
+        .constructor([](const std::string& data, int i){
+            return Constructible(data + std::to_string(i));
+        })
+    ;
+    ns.register_type<std::string>();
+    ns.register_type<int>();
+
+    auto param = ns.object<std::string>("foo");
+    BOOST_CHECK_EQUAL( ns.object("Constructible", {param}).get({"data"}).to_string(), "foo" );
+    BOOST_CHECK_THROW( ns.object("Constructible", {param, param}), MemberNotFound );
+    BOOST_CHECK_THROW( ns.object("Constructible", {ns.object(1)}), MemberNotFound );
+    BOOST_CHECK_EQUAL( ns.object("Constructible", {param, ns.object(1)}).get({"data"}).to_string(), "foo1" );
 }
 
 BOOST_AUTO_TEST_CASE( test_converter_explicit )

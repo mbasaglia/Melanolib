@@ -98,7 +98,7 @@ namespace wrapper {
 /**
  * \brief Exception thrown when trying to access a member that has not been exposed
  */
-class MemberNotFound : std::runtime_error
+class MemberNotFound : public std::runtime_error
 {
 public:
     explicit MemberNotFound(const std::string& message)
@@ -109,7 +109,7 @@ public:
 /**
  * \brief Exception thrown when passing bad parameters to a function
  */
-class FunctionError : std::invalid_argument
+class FunctionError : public std::invalid_argument
 {
 public:
     explicit FunctionError(const std::string& message)
@@ -120,7 +120,7 @@ public:
 /**
  * \brief Exception thrown when trying to access a type that has not been exposed
  */
-class TypeError : std::logic_error
+class TypeError : public std::logic_error
 {
 public:
     explicit TypeError(const std::string& message)
@@ -308,7 +308,7 @@ namespace wrapper {
         /**
          * \brief Typeinfo object for the wrapped type
          */
-        virtual const std::type_info& type_info() const noexcept = 0;
+        virtual std::type_index type_index() const noexcept = 0;
 
         const Namespace& parent_namespace() const
         {
@@ -336,6 +336,46 @@ namespace wrapper {
         template<class HeldType>
             using UnregGetter = std::function<Object(const HeldType&, const std::string& name)>;
 
+        template<class Return, class... FixedArgs>
+        class Overloadable
+        {
+        public:
+            using Functor = std::function<Return(FixedArgs..., const Object::Arguments&)>;
+            using TypeList = std::vector<std::type_index>;
+
+            template<class FunctorT, class... Args>
+            Overloadable(DummyTuple<Args...>, FunctorT&& functor)
+                : functor(std::forward<FunctorT>(functor)),
+                  types({std::type_index(typeid(Args))...})
+            {}
+
+            bool can_call(const Object::Arguments& args) const
+            {
+                if ( args.size() != types.size() )
+                    return false;
+                auto type_iter = types.begin();
+                for ( const Object& arg : args )
+                {
+                    if ( arg.type().type_index() != *type_iter )
+                        return false;
+                    ++type_iter;
+                }
+                return true;
+            }
+
+            /**
+             * \pre can_call(args)
+             */
+            Return operator()(FixedArgs... pre_args, const Object::Arguments& args) const
+            {
+                return functor(pre_args..., args);
+            }
+        private:
+            Functor functor;
+            TypeList types;
+        };
+
+
         template<class HeldType>
             using Method = std::function<Object(HeldType&, const Object::Arguments&)>;
 
@@ -352,7 +392,10 @@ namespace wrapper {
             using UnregSetter = std::function<void(HeldType&, const std::string& name, const Object&)>;
 
         template<class HeldType>
-            using Constructor = std::function<Object(const Object::Arguments&)>;
+            using Constructor = Overloadable<Object>;
+
+        template<class HeldType>
+            using ConstrorList = std::vector<Constructor<HeldType>>;
 
         template<class HeldType>
             using ConverterMap = std::unordered_map<std::type_index, Getter<HeldType>>;
@@ -483,7 +526,7 @@ namespace wrapper {
         template<class Functor>
             ClassWrapper& conversion(const Functor& functor);
 
-        const std::type_info& type_info() const noexcept override
+        std::type_index type_index() const noexcept override
         {
             return typeid(HeldType);
         }
@@ -571,7 +614,7 @@ namespace wrapper {
         detail::MethodMap<HeldType> methods;
         detail::SetterMap<HeldType> setters;
         detail::UnregSetter<HeldType> _fallback_setter;
-        detail::Constructor<HeldType> _constructor;
+        detail::ConstrorList<HeldType> _constructors;
         detail::ConverterMap<HeldType> converters;
     };
 
@@ -688,7 +731,7 @@ public:
     {
         auto ptr = std::make_unique<wrapper::ClassWrapper<Type>>(name, this);
         auto& ref = *ptr;
-        classes[ptr->type_info()] = std::move(ptr);
+        classes[ptr->type_index()] = std::move(ptr);
         return ref;
     }
 
@@ -1171,8 +1214,8 @@ namespace wrapper {
                 const std::string& name,
                 Functor functor)
             {
-                return [type, functor](HeldType& value, const Object::Arguments& args) {
-                    using Sig = FunctionSignature<Functor>;
+                using Sig = FunctionSignature<Functor>;
+                return  [type, functor](HeldType& value, const Object::Arguments& args) {
                     return type->parent_namespace().object(
                         call_helper<HeldType, typename Sig::return_type>(
                             functor, value, args,
@@ -1203,19 +1246,22 @@ namespace wrapper {
              * \todo Wrap constructors directly
              */
             template<class HeldType, class Functor>
-            auto wrap_ctor(
+            Constructor<HeldType> wrap_ctor(
                 const ClassWrapper<HeldType>* type,
                 Functor functor)
             {
-                return [type, functor](const Object::Arguments& args) {
-                    using Sig = FunctionSignature<Functor>;
-                    return type->parent_namespace().object(
-                        ctor_helper<HeldType>(
-                            functor, args,
-                            typename Sig::argument_types_tag(),
-                            std::make_index_sequence<Sig::argument_count>()
-                        )
-                    );
+                using Sig = FunctionSignature<Functor>;
+                return {
+                    typename Sig::argument_types_tag{},
+                    [type, functor](const Object::Arguments& args) {
+                        return type->parent_namespace().object(
+                            ctor_helper<HeldType>(
+                                functor, args,
+                                typename Sig::argument_types_tag{},
+                                std::make_index_sequence<Sig::argument_count>()
+                            )
+                        );
+                    }
                 };
             }
 
@@ -1236,15 +1282,18 @@ namespace wrapper {
              * \brief Exposes a class constructor
              */
             template<class HeldType, class... Args>
-            auto wrap_ctor(const ClassWrapper<HeldType>* type)
+            Constructor<HeldType> wrap_ctor(const ClassWrapper<HeldType>* type)
             {
-                return [type](const Object::Arguments& args) {
-                    return type->parent_namespace().object(
-                        ctor_helper<HeldType, Args...>(
-                            args,
-                            std::make_index_sequence<sizeof...(Args)>()
-                        )
-                    );
+                return {
+                    DummyTuple<Args...>(),
+                    [type](const Object::Arguments& args) {
+                        return type->parent_namespace().object(
+                            ctor_helper<HeldType, Args...>(
+                                args,
+                                std::make_index_sequence<sizeof...(Args)>()
+                            )
+                        );
+                    }
                 };
             }
 
@@ -1299,7 +1348,7 @@ namespace wrapper {
     template<class T>
         ClassWrapper<Class>& ClassWrapper<Class>::constructor(const T& functor)
     {
-        _constructor = detail::function::wrap_ctor<HeldType>(this, functor);
+        _constructors.push_back(detail::function::wrap_ctor<HeldType>(this, functor));
         return *this;
     }
 
@@ -1307,16 +1356,19 @@ namespace wrapper {
     template<class... Args>
         ClassWrapper<Class>& ClassWrapper<Class>::constructor()
     {
-        _constructor = detail::function::wrap_ctor<HeldType, Args...>(this);
+        _constructors.push_back(detail::function::wrap_ctor<HeldType, Args...>(this));
         return *this;
     }
 
     template<class Class>
     Object ClassWrapper<Class>::make_object(const Object::Arguments& arguments) const
     {
-        if ( !_constructor )
+        if ( _constructors.empty() )
             throw MemberNotFound("Class " + name() + " doesn't have a constructor");
-        return _constructor(arguments);
+        for ( const auto& ctor : _constructors )
+            if ( ctor.can_call(arguments) )
+                return ctor(arguments);
+        throw MemberNotFound("No matching call to " + name() + " constructor");
     }
 
     template<class Class>
