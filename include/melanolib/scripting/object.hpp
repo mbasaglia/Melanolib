@@ -408,6 +408,13 @@ namespace wrapper {
         template<class T>
             ClassWrapper& constructor(const T& functor);
 
+        /**
+         * \brief Exposes a constructor
+         * \tparam Args constructor arguments
+         */
+        template<class... Args>
+            ClassWrapper& constructor();
+
         const std::type_info& type_info() const noexcept override
         {
             return typeid(HeldType);
@@ -1045,7 +1052,7 @@ namespace wrapper {
             }
 
             /**
-             * Function object/pointer
+             * Constructor, Functor
              */
             template<class HeldType, class Functor, class... Args, std::size_t... Indices>
             HeldType ctor_helper(
@@ -1059,7 +1066,7 @@ namespace wrapper {
                 return std::invoke(functor, args[Indices].cast<Args>()...);
             }
 
-            /** Constructor
+            /** Constructor, Functor
              * \brief Exposes a functor as a class constructor
              * \todo Wrap constructors directly
              */
@@ -1075,6 +1082,35 @@ namespace wrapper {
                             functor, args,
                             typename Sig::argument_types_tag(),
                             std::make_index_sequence<Sig::argument_count>()
+                        )
+                    );
+                };
+            }
+
+            /**
+             * Constructor
+             */
+            template<class HeldType, class... Args, std::size_t... Indices>
+            HeldType ctor_helper_direct(
+                const Object::Arguments& args,
+                std::index_sequence<Indices...>)
+            {
+                if ( args.size() != sizeof...(Args) )
+                    throw FunctionError("Wrong number of arguments");
+                return HeldType(args[Indices].cast<Args>()...);
+            }
+
+            /** Constructor
+             * \brief Exposes a class constructor
+             */
+            template<class HeldType, class... Args>
+            auto wrap_ctor(const ClassWrapper<HeldType>* type)
+            {
+                return [type](const Object::Arguments& args) {
+                    return type->parent_namespace().object(
+                        ctor_helper_direct<HeldType, Args...>(
+                            args,
+                            std::make_index_sequence<sizeof...(Args)>()
                         )
                     );
                 };
@@ -1132,6 +1168,14 @@ namespace wrapper {
         ClassWrapper<Class>& ClassWrapper<Class>::constructor(const T& functor)
     {
         _constructor = detail::function::wrap_ctor<HeldType>(this, functor);
+        return *this;
+    }
+
+    template<class Class>
+    template<class... Args>
+        ClassWrapper<Class>& ClassWrapper<Class>::constructor()
+    {
+        _constructor = detail::function::wrap_ctor<HeldType, Args...>(this);
         return *this;
     }
 

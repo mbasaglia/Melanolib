@@ -508,3 +508,20 @@ BOOST_AUTO_TEST_CASE( test_constructor_noarg )
 
     BOOST_CHECK_EQUAL( ns.object("Constructible", {}).get({"data"}).to_string(), "data" );
 }
+
+BOOST_AUTO_TEST_CASE( test_constructor_raw )
+{
+    Namespace ns;
+    ns.register_type<Constructible>("Constructible")
+        .add_readonly("data", &Constructible::data)
+        .constructor<std::string>()
+    ;
+    ns.register_type<std::string>();
+    ns.register_type<int>();
+
+    auto param = ns.object<std::string>("foo");
+    BOOST_CHECK_EQUAL( ns.object("Constructible", {param}).get({"data"}).to_string(), "foo" );
+    BOOST_CHECK_THROW( ns.object("Constructible", {param, param}), FunctionError );
+    BOOST_CHECK_THROW( ns.object("Constructible", {ns.object(1)}), TypeError );
+}
+
