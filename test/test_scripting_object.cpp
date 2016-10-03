@@ -239,10 +239,10 @@ BOOST_AUTO_TEST_CASE( test_method_access_method )
     BOOST_CHECK_EQUAL( object.get({"data"}).to_string(), "data" );
 
     BOOST_CHECK_EQUAL( object.call("method_noargs", {}).to_string(), "-data");
-    BOOST_CHECK_THROW( object.call("method_arg", {}).to_string(), FunctionError);
+    BOOST_CHECK_THROW( object.call("method_arg", {}).to_string(), MemberNotFound);
     BOOST_CHECK_EQUAL( object.call("method_noconst", {}).to_string(), "+data");
     Object arg = ns.object<std::string>("foo");
-    BOOST_CHECK_THROW( object.call("method_noargs", {arg}).to_string(), FunctionError);
+    BOOST_CHECK_THROW( object.call("method_noargs", {arg}).to_string(), MemberNotFound);
     BOOST_CHECK_EQUAL( object.call("method_arg", {arg}).to_string(), "-foodata");
 
 }
@@ -271,10 +271,10 @@ BOOST_AUTO_TEST_CASE( test_method_access_functor_object_const )
 
     Object object = ns.object(SomeClass());
     BOOST_CHECK_EQUAL( object.call("lambda_noargs", {}).to_string(), "data member");
-    BOOST_CHECK_THROW( object.call("lambda_arg", {}).to_string(), FunctionError);
+    BOOST_CHECK_THROW( object.call("lambda_arg", {}).to_string(), MemberNotFound);
     BOOST_CHECK_EQUAL( object.call("lambda_copy", {}).to_string(), "data member");
     Object arg = ns.object<std::string>("foo");
-    BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), FunctionError);
+    BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), MemberNotFound);
     BOOST_CHECK_EQUAL( object.call("lambda_arg", {arg}).to_string(), "foodata member");
     BOOST_CHECK_EQUAL( object.call("fnptr", {arg}).to_string(), "data memberfoo");
 
@@ -301,9 +301,9 @@ BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noconst )
 
     Object object = ns.object(SomeClass());
     BOOST_CHECK_EQUAL( object.call("lambda_noargs", {}).to_string(), "data member");
-    BOOST_CHECK_THROW( object.call("lambda_arg", {}).to_string(), FunctionError);
+    BOOST_CHECK_THROW( object.call("lambda_arg", {}).to_string(), MemberNotFound);
     Object arg = ns.object<std::string>("foo");
-    BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), FunctionError);
+    BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), MemberNotFound);
     BOOST_CHECK_EQUAL( object.call("lambda_arg", {arg}).to_string(), "foodata member");
     BOOST_CHECK_EQUAL( object.call("fnptr", {arg}).to_string(), "data memberfoo");
 }
@@ -329,11 +329,34 @@ BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noobject )
 
     Object object = ns.object(SomeClass());
     BOOST_CHECK_EQUAL( object.call("lambda_noargs", {}).to_string(), "noargs");
-    BOOST_CHECK_THROW( object.call("lambda_arg", {}).to_string(), FunctionError);
+    BOOST_CHECK_THROW( object.call("lambda_arg", {}).to_string(), MemberNotFound);
     Object arg = ns.object<std::string>("foo");
-    BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), FunctionError);
+    BOOST_CHECK_THROW( object.call("lambda_noargs", {arg}).to_string(), MemberNotFound);
     BOOST_CHECK_EQUAL( object.call("lambda_arg", {arg}).to_string(), "foo");
     BOOST_CHECK_EQUAL( object.call("fnptr", {arg}).to_string(), "foofoo");
+}
+
+BOOST_AUTO_TEST_CASE( test_method_overload )
+{
+    Namespace ns;
+    ns.register_type<SomeClassWithMethods>()
+        .add_readonly("data", &SomeClassWithMethods::data)
+        .add_method("method", &SomeClassWithMethods::method_noargs)
+        .add_method("method", &SomeClassWithMethods::method_arg)
+        .add_method("method", [](const std::string& arg1, const std::string& arg2) {
+            return arg1 + arg2;
+        })
+    ;
+    ns.register_type<std::string>();
+    ns.register_type<int>();
+
+    Object object = ns.object(SomeClassWithMethods());
+    Object arg = ns.object<std::string>("foo");
+    BOOST_CHECK_EQUAL( object.call("method", {}).to_string(), "-data");
+    BOOST_CHECK_EQUAL( object.call("method", {arg}).to_string(), "-foodata");
+    BOOST_CHECK_EQUAL( object.call("method", {arg, arg}).to_string(), "foofoo");
+    BOOST_CHECK_THROW( object.call("method", {arg, arg, arg}).to_string(), MemberNotFound);
+    BOOST_CHECK_THROW( object.call("method", {ns.object(1)}).to_string(), MemberNotFound);
 }
 
 struct SettableClass

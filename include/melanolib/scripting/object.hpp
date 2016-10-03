@@ -81,7 +81,7 @@ namespace wrapper {
 
         /**
          * \brief Calls a child function
-         * \throws MemberNotFound, FunctionError or TypeError
+         * \throws MemberNotFound
          */
         virtual Object call_method(const std::string& name, const std::vector<Object>& args) = 0;
 
@@ -103,17 +103,6 @@ class MemberNotFound : public std::runtime_error
 public:
     explicit MemberNotFound(const std::string& message)
         : runtime_error(message)
-    {}
-};
-
-/**
- * \brief Exception thrown when passing bad parameters to a function
- */
-class FunctionError : public std::invalid_argument
-{
-public:
-    explicit FunctionError(const std::string& message)
-        : invalid_argument(message)
     {}
 };
 
@@ -368,6 +357,8 @@ namespace wrapper {
              */
             Return operator()(FixedArgs... pre_args, const Object::Arguments& args) const
             {
+                if ( args.size() != types.size() )
+                    throw TypeError("Wrong number of arguments");
                 return functor(pre_args..., args);
             }
         private:
@@ -377,10 +368,10 @@ namespace wrapper {
 
 
         template<class HeldType>
-            using Method = std::function<Object(HeldType&, const Object::Arguments&)>;
+            using Method = Overloadable<Object, HeldType&>;
 
         template<class HeldType>
-            using MethodMap = std::unordered_map<std::string, Method<HeldType>>;
+            using MethodMap = std::unordered_multimap<std::string, Method<HeldType>>;
 
         template<class HeldType>
             using Setter = std::function<void(HeldType&, const Object&)>;
@@ -579,12 +570,14 @@ namespace wrapper {
             const std::string& method,
             const Object::Arguments& arguments) const
         {
-            auto iter = methods.find(method);
-            if ( iter == methods.end() )
-            {
+            auto range = methods.equal_range(method);
+            if ( range.first == range.second )
                 throw MemberNotFound("\"" + method + "\" is not a member function of " + name());
-            }
-            return iter->second(owner, arguments);
+
+            for ( auto it = range.first; it != range.second; ++it )
+                if ( it->second.can_call(arguments) )
+                    return it->second(owner, arguments);
+            throw MemberNotFound("No matching overload of \"" + method + "\" in " + name());
         }
 
         /**
@@ -1122,108 +1115,133 @@ namespace wrapper {
         } // namespace setter
 
         namespace function {
+
+            template<class MethodType, class HeldType, class Functor, class... Args>
+            struct MethodBase
+            {
+                auto operator()(HeldType& value, const Object::Arguments& args) const
+                {
+                    return type->parent_namespace().object(
+                        MethodType::template invoke<HeldType, Functor, Args...>(
+                            functor, value, args,
+                            std::make_index_sequence<sizeof...(Args)>{}
+                        )
+                    );
+                }
+
+                Method<HeldType> method() const
+                {
+                    return {DummyTuple<Args...>{}, *this};
+                }
+
+                const ClassWrapper<HeldType>* type;
+                Functor functor;
+            };
+
             /*
              * Member function or functor taking a pointer as first argument
              */
-            template<class HeldType, class Ret, class Functor, class... Args, std::size_t... Indices>
+            struct MethodPointer
+            {
+                template<class HeldType, class Functor, class... Args, std::size_t... Indices>
+                    static auto invoke(const Functor& functor,
+                                       HeldType& value,
+                                       const Object::Arguments& args,
+                                       std::index_sequence<Indices...>)
+                    {
+                        return  std::invoke(functor, value, args[Indices].cast<Args>()...);
+                    }
+            };
+
+            template<class HeldType, class Functor, class... Args>
             auto call_helper(
+                const ClassWrapper<HeldType>* type,
                 Functor functor,
-                HeldType& object,
-                const Object::Arguments& args,
-                DummyTuple<Args...>,
-                std::index_sequence<Indices...>)
+                DummyTuple<Args...>)
             -> std::enable_if_t<
                 std::is_member_function_pointer<Functor>::value ||
                 IsCallableAnyReturn<Functor, HeldType*, Args...>::value,
-                Ret
-            >
-            {
-                if ( args.size() != sizeof...(Args) )
-                    throw FunctionError("Wrong number of arguments");
-                return std::invoke(functor, object, args[Indices].cast<Args>()...);
-            }
+                MethodBase<MethodPointer, HeldType, Functor, Args...>
+            > { return {type, functor}; }
 
             /*
              * Function object/pointer taking a reference or value as first argument
              */
-            template<class HeldType, class Ret, class Functor, class Head, class... Args, std::size_t... Indices>
+            struct MethodReference
+            {
+                template<class HeldType, class Functor, class... Args, std::size_t... Indices>
+                    static auto invoke(const Functor& functor,
+                                       HeldType& value,
+                                       const Object::Arguments& args,
+                                       std::index_sequence<Indices...>)
+                    {
+                        return std::invoke(functor, value, args[Indices].cast<Args>()...);
+                    }
+            };
+            template<class HeldType, class Functor, class Head, class... Args>
             auto call_helper(
+                const ClassWrapper<HeldType>* type,
                 Functor functor,
-                HeldType& object,
-                const Object::Arguments& args,
-                DummyTuple<Head, Args...>,
-                std::index_sequence<0, Indices...>)
+                DummyTuple<Head, Args...>)
             -> std::enable_if_t<
                 IsCallableAnyReturn<Functor, HeldType&, Args...>::value,
-                Ret
-            >
-            {
-                if ( args.size() != sizeof...(Args) )
-                    throw FunctionError("Wrong number of arguments");
-                return std::invoke(functor, object, args[Indices-1].cast<Args>()...);
-            }
+                MethodBase<MethodReference, HeldType, Functor, Args...>
+            > { return {type, functor}; }
 
             /**
              * Function object/pointer taking at least 1 argument
              */
-            template<class HeldType, class Ret, class Functor, class Head, class... Args, std::size_t... Indices>
+            struct MethodOther
+            {
+                template<class HeldType, class Functor, class... Args, std::size_t... Indices>
+                    static auto invoke(const Functor& functor,
+                                       HeldType& value,
+                                       const Object::Arguments& args,
+                                       std::index_sequence<Indices...>)
+                    {
+                        return std::invoke(functor, args[Indices].cast<Args>()...);
+                    }
+            };
+            template<class HeldType, class Functor, class Head, class... Args>
             auto call_helper(
+                const ClassWrapper<HeldType>* type,
                 Functor functor,
-                HeldType& object,
-                const Object::Arguments& args,
-                DummyTuple<Head, Args...>,
-                std::index_sequence<0, Indices...>)
+                DummyTuple<Head, Args...>)
             -> std::enable_if_t<
                 !std::is_member_function_pointer<Functor>::value &&
                 !std::is_convertible<HeldType&, Head>::value &&
                 !std::is_convertible<HeldType*, Head>::value,
-                Ret
-            >
-            {
-                if ( args.size() != sizeof...(Args) + 1 )
-                    throw FunctionError("Wrong number of arguments");
-                return std::invoke(functor, args[0].cast<Head>(), args[Indices].cast<Args>()...);
-            }
+                MethodBase<MethodOther, HeldType, Functor, Head, Args...>
+            > { return {type, functor}; }
 
             /**
              * Function object/pointer taking no arguments
              */
-            template<class HeldType, class Ret, class Functor>
+            template<class HeldType, class Functor>
             auto call_helper(
+                const ClassWrapper<HeldType>* type,
                 Functor functor,
-                HeldType& object,
-                const Object::Arguments& args,
-                DummyTuple<>,
-                std::index_sequence<>)
+                DummyTuple<>)
             -> std::enable_if_t<
                 !std::is_member_function_pointer<Functor>::value,
-                Ret
-            >
-            {
-                if ( args.size() != 0 )
-                    throw FunctionError("Wrong number of arguments");
-                return std::invoke(functor);
-            }
+                MethodBase<MethodOther, HeldType, Functor>
+            > { return {type, functor}; }
 
             /** Member function
              * \brief Exposes a functor as a method of the class
              */
             template<class HeldType, class Functor>
-            auto wrap_functor(
+            Method<HeldType> wrap_functor(
                 const ClassWrapper<HeldType>* type,
                 const std::string& name,
                 Functor functor)
             {
                 using Sig = FunctionSignature<Functor>;
-                return  [type, functor](HeldType& value, const Object::Arguments& args) {
-                    return type->parent_namespace().object(
-                        call_helper<HeldType, typename Sig::return_type>(
-                            functor, value, args,
-                            typename Sig::argument_types_tag(),
-                            std::make_index_sequence<Sig::argument_count>()
-                        )
-                    );
-                };
+                return call_helper(
+                    type,
+                    functor,
+                    typename Sig::argument_types_tag()
+                ).method();
             }
 
             /**
@@ -1236,8 +1254,6 @@ namespace wrapper {
                 DummyTuple<Args...>,
                 std::index_sequence<Indices...>)
             {
-                if ( args.size() != sizeof...(Args) )
-                    throw FunctionError("Wrong number of arguments");
                 return std::invoke(functor, args[Indices].cast<Args>()...);
             }
 
@@ -1273,8 +1289,6 @@ namespace wrapper {
                 const Object::Arguments& args,
                 std::index_sequence<Indices...>)
             {
-                if ( args.size() != sizeof...(Args) )
-                    throw FunctionError("Wrong number of arguments");
                 return HeldType(args[Indices].cast<Args>()...);
             }
 
@@ -1322,7 +1336,10 @@ namespace wrapper {
     template<class T>
         ClassWrapper<Class>& ClassWrapper<Class>::add_method(const std::string& name, const T& value)
         {
-            methods[name] = detail::function::wrap_functor<HeldType>(this, name, value);
+            methods.insert({
+                name,
+                detail::function::wrap_functor<HeldType>(this, name, value)
+            });
             return *this;
         }
 
