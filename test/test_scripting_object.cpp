@@ -708,6 +708,15 @@ BOOST_AUTO_TEST_CASE( test_reference_fixed_value_return_policy )
     copy.set("data", ns.object<std::string>("foo"));
     BOOST_CHECK_EQUAL( copy.get("data").to_string(), "foo" );
     BOOST_CHECK_EQUAL( child.data_member, "bar" );
-
 }
 
+BOOST_AUTO_TEST_CASE( test_object_forwarding )
+{
+    Namespace ns;
+    ns.register_type<std::string>("string")
+        .add_method("getobject", [&ns](){return ns.object<std::string>("bar");})
+    ;
+
+    Object foo = ns.object<std::string>("foo");
+    BOOST_CHECK_EQUAL( foo.call("getobject", {}).to_string(), "bar" );
+}

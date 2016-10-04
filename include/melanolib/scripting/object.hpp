@@ -854,6 +854,34 @@ public:
     }
 
     /**
+     * \brief Overload to forward Object instances without additional wrapping
+     */
+    Object object(const Object& value) const
+    {
+        return value;
+    }
+
+    /**
+     * \brief Overload to forward Object instances without additional wrapping
+     *
+     * Objects share their state between copies anyway
+     */
+    Object object(const Ref<Object>& reference) const
+    {
+        return reference.get();
+    }
+
+    /**
+     * \brief Overload to forward Object instances without additional wrapping
+     *
+     * Objects share their state between copies anyway
+     */
+    Object reference(Object& reference) const
+    {
+        return reference;
+    }
+
+    /**
      * \brief Creates an object from run-time values
      * \throws TypeError if the type has not been registered
      * \note It's possible for multiple types to have the same name, if that
@@ -869,11 +897,6 @@ public:
             }
         }
         throw TypeError("Unregister type: " + class_name);
-    }
-
-    Object object(const Object& value) const
-    {
-        return value;
     }
 
     template<class T>
