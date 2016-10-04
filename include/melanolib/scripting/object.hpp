@@ -246,6 +246,15 @@ private:
     std::shared_ptr<wrapper::ValueWrapper> value;
 };
 
+template<class T>
+using Ref = std::reference_wrapper<T>;
+
+template<class T>
+Ref<T> wrap_reference(T& reference)
+{
+    return reference;
+}
+
 /**
  * \brief Object used to store values, by default stores a copy.
  *
@@ -255,20 +264,32 @@ template<class T>
     struct ValueHolder
 {
     ValueHolder(const T& value)
-        : value(value)
+        : holder(value)
+    {}
+
+    ValueHolder(T* pointer)
+        : holder(pointer)
+    {}
+
+    ValueHolder(const Ref<T>& reference)
+        : holder(&reference.get())
     {}
 
     const T& get() const
     {
-        return value;
+        if ( holder.which() == 0 )
+            return melanolib::get<T>(holder);
+        return *melanolib::get<T*>(holder);
     }
 
     T& get()
     {
-        return value;
+        if ( holder.which() == 0 )
+            return melanolib::get<T>(holder);
+        return *melanolib::get<T*>(holder);;
     }
 
-    T value;
+    melanolib::Variant<T, T*> holder;
 };
 
 namespace wrapper {
@@ -667,6 +688,10 @@ namespace wrapper {
             : ValueWrapper(type), value(value)
         {}
 
+        explicit ObjectWrapper(const Ref<Class>& reference, const ClassWrapper<Class>* type)
+            : ValueWrapper(type), value(reference)
+        {}
+
         std::string to_string() const override
         {
             return Stringizer<Class>()(value.get(), type());
@@ -745,7 +770,27 @@ public:
     template<class Class>
     Object object(const Class& value) const
     {
-        return object<Class, const Class&>(value);
+        return build_object<Class>(value);
+    }
+
+    /**
+     * \brief Creates an object wrapper around the reference
+     * \throws TypeError if \p Class has not been registered with register_type
+     */
+    template<class Class>
+    Object object(const Ref<Class>& reference) const
+    {
+        return build_object<Class>(reference);
+    }
+
+    /**
+     * \brief Creates an object wrapper around the reference
+     * \throws TypeError if \p Class has not been registered with register_type
+     */
+    template<class Class>
+    Object reference(Class& reference) const
+    {
+        return build_object<Class>(wrap_reference(reference));
     }
 
     /**
@@ -755,13 +800,7 @@ public:
     template<class Class, class... Args>
     Object object(Args&&... args) const
     {
-        auto iter = classes.find(typeid(Class));
-        if ( iter == classes.end() )
-            throw TypeError("Unregister type");
-        return Object(std::make_shared<wrapper::ObjectWrapper<Class>>(
-            std::forward<Args>(args)...,
-            static_cast<wrapper::ClassWrapper<Class>*>(iter->second.get())
-        ));
+        return build_object<Class>(Class(std::forward<Args>(args)...));
     }
 
     /**
@@ -806,6 +845,18 @@ public:
     }
 
 private:
+    template<class Class, class Ctor>
+    Object build_object(Ctor&& ctor_arg) const
+    {
+        auto iter = classes.find(typeid(Class));
+        if ( iter == classes.end() )
+            throw TypeError("Unregister type");
+        return Object(std::make_shared<wrapper::ObjectWrapper<Class>>(
+            std::forward<Ctor>(ctor_arg),
+            static_cast<wrapper::ClassWrapper<Class>*>(iter->second.get())
+        ));
+    }
+
     std::unordered_map<std::type_index, std::unique_ptr<wrapper::TypeWrapper>> classes;
 };
 

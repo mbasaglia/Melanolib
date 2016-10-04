@@ -604,3 +604,33 @@ BOOST_AUTO_TEST_CASE( test_converter_implicit )
     BOOST_CHECK_THROW( object.converted_cast<double>(), MemberNotFound );
 }
 
+BOOST_AUTO_TEST_CASE( test_reference_wrapping )
+{
+    Namespace ns;
+    ns.register_type<SomeClass>("SomeClass")
+        .add_readwrite("data", &SomeClass::data_member)
+    ;
+    ns.register_type<std::string>("string");
+    SomeClass object;
+    Object wrapper = ns.reference(object);
+    BOOST_CHECK_EQUAL( wrapper.get("data").to_string(), "data member" );
+    wrapper.set("data", ns.object<std::string>("foo"));
+    BOOST_CHECK_EQUAL( wrapper.get("data").to_string(), "foo" );
+    BOOST_CHECK_EQUAL( object.data_member, "foo" );
+}
+
+
+BOOST_AUTO_TEST_CASE( test_reference_wrapping_ref_tag )
+{
+    Namespace ns;
+    ns.register_type<SomeClass>("SomeClass")
+        .add_readwrite("data", &SomeClass::data_member)
+    ;
+    ns.register_type<std::string>("string");
+    SomeClass object;
+    Object wrapper = ns.object(wrap_reference(object));
+    BOOST_CHECK_EQUAL( wrapper.get("data").to_string(), "data member" );
+    wrapper.set("data", ns.object<std::string>("foo"));
+    BOOST_CHECK_EQUAL( wrapper.get("data").to_string(), "foo" );
+    BOOST_CHECK_EQUAL( object.data_member, "foo" );
+}
