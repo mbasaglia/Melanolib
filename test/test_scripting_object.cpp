@@ -720,3 +720,27 @@ BOOST_AUTO_TEST_CASE( test_object_forwarding )
     Object foo = ns.object<std::string>("foo");
     BOOST_CHECK_EQUAL( foo.call("getobject", {}).to_string(), "bar" );
 }
+
+struct NestedClass
+{
+    SomeClass value;
+};
+
+BOOST_AUTO_TEST_CASE( test_reference_member_return_policy )
+{
+    Namespace ns;
+    ns.register_type<SomeClass>()
+        .add_readwrite("data", &SomeClass::data_member)
+    ;
+    ns.register_type<NestedClass>()
+        .add_readwrite("value", &NestedClass::value, WrapReferencePolicy{})
+    ;
+    ns.register_type<std::string>();
+
+    Object object = ns.object<NestedClass>();
+    Object reference = object.get("value");
+    BOOST_CHECK_EQUAL( reference.get("data").to_string(), "data member" );
+    reference.set("data", ns.object<std::string>("foo"));
+    BOOST_CHECK_EQUAL( reference.get("data").to_string(), "foo" );
+    BOOST_CHECK_EQUAL( object.get({"value", "data"}).to_string(), "foo" );
+}

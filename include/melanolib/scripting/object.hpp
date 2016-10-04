@@ -814,6 +814,16 @@ public:
     }
 
     /**
+     * \warning Evil bind, needed to bind direct members as getters that should
+     *          be wrapped as references (which can't be const by definition)
+     */
+    template<class Class>
+    Object bind(const Class& value, WrapReferencePolicy) const
+    {
+        return reference(const_cast<Class&>(value));
+    }
+
+    /**
      * \brief Creates an object wrapper around the value
      * \throws TypeError if \p Class has not been registered with register_type
      */
