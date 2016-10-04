@@ -143,7 +143,7 @@ template <class T, std::size_t Size>
 #ifndef __cpp_lib_invoke
 namespace std {
 template<class... Args>
-    auto invoke(Args&&... args) {
+    decltype(auto) invoke(Args&&... args) {
         return std::__invoke(std::forward<Args>(args)...);
     }
 } // namespace std
