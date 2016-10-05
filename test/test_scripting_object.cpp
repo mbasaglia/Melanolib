@@ -745,7 +745,6 @@ BOOST_AUTO_TEST_CASE( test_reference_member_return_policy )
     BOOST_CHECK_EQUAL( object.get({"value", "data"}).to_string(), "foo" );
 }
 
-
 BOOST_AUTO_TEST_CASE( test_auto_register )
 {
     Namespace ns;
