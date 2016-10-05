@@ -765,6 +765,22 @@ namespace wrapper {
 } // namespace wrapper
 
 /**
+ * \brief Template used to register typesm
+ * Specialize create_wrapper for customizable behavour or default attributes
+ */
+template<class Type>
+struct Registrar
+{
+    using TypeWrapper = wrapper::ClassWrapper<Type>;
+    using Pointer = std::unique_ptr<TypeWrapper>;
+
+    static Pointer create_wrapper(const std::string& name, Namespace* ns)
+    {
+        return std::make_unique<TypeWrapper>(name, ns);
+    }
+};
+
+/**
  * \brief Type registry
  */
 class Namespace
@@ -775,9 +791,9 @@ public:
      * \returns The registered class wrapper
      */
     template<class Type>
-        wrapper::ClassWrapper<Type>& register_type(const std::string& name)
+    auto& register_type(const std::string& name)
     {
-        auto ptr = std::make_unique<wrapper::ClassWrapper<Type>>(name, this);
+        auto ptr = Registrar<Type>::create_wrapper(name, this);
         auto& ref = *ptr;
         classes[ptr->type_index()] = std::move(ptr);
         return ref;
@@ -1628,6 +1644,35 @@ template<>
 Object Object::converted<const Object&>() const
 {
     return *this;
+}
+
+class SimpleType
+{
+public:
+    Object get(const std::string& name) const
+    {
+        auto iter = attributes.find(name);
+        if ( iter != attributes.end() )
+            return iter->second;
+        throw MemberNotFound(name);
+    }
+
+    void set(const std::string& name, const Object& value)
+    {
+        attributes.insert({name, value});
+    }
+
+private:
+    std::unordered_map<std::string, Object> attributes;
+};
+
+template<>
+Registrar<SimpleType>::Pointer Registrar<SimpleType>::create_wrapper(const std::string& name, Namespace* ns)
+{
+    auto ptr = std::make_unique<TypeWrapper>(name, ns);
+    ptr->fallback_getter(&SimpleType::get);
+    ptr->fallback_setter(&SimpleType::set);
+    return ptr;
 }
 
 } // namespace scripting

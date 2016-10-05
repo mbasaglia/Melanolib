@@ -744,3 +744,16 @@ BOOST_AUTO_TEST_CASE( test_reference_member_return_policy )
     BOOST_CHECK_EQUAL( reference.get("data").to_string(), "foo" );
     BOOST_CHECK_EQUAL( object.get({"value", "data"}).to_string(), "foo" );
 }
+
+
+BOOST_AUTO_TEST_CASE( test_auto_register )
+{
+    Namespace ns;
+    ns.register_type<SimpleType>();
+    ns.register_type<std::string>();
+
+    Object object = ns.object<SimpleType>();
+    BOOST_CHECK_THROW( object.get("foo").to_string(), MemberNotFound );
+    object.set("foo", ns.object<std::string>("bar"));
+    BOOST_CHECK_EQUAL( object.get("foo").to_string(), "bar" );
+}
