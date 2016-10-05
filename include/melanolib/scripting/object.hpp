@@ -732,6 +732,13 @@ struct Stringizer
 
 };
 
+template<>
+std::string Stringizer<std::string>::operator()(
+    const std::string& value, const wrapper::TypeWrapper& type) const
+{
+    return value;
+}
+
 namespace wrapper {
 
     /**
