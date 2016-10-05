@@ -756,3 +756,38 @@ BOOST_AUTO_TEST_CASE( test_auto_register )
     object.set("foo", ns.object<std::string>("bar"));
     BOOST_CHECK_EQUAL( object.get("foo").to_string(), "bar" );
 }
+
+BOOST_AUTO_TEST_CASE( test_import_type )
+{
+    Namespace source_ns;
+    source_ns.register_type<SomeClass>("SomeClass")
+        .add_readonly("data", &SomeClass::data_member)
+    ;
+    source_ns.register_type<std::string>("string");
+
+    Namespace ns;
+    BOOST_CHECK_THROW( ns.object<SomeClass>(), TypeError );
+
+    ns.import_type<SomeClass>(source_ns);
+    BOOST_CHECK_NO_THROW( ns.object<SomeClass>() );
+    BOOST_CHECK_THROW( ns.object<SomeClass>().get("data"), TypeError );
+
+    ns.import_type(source_ns, "string");
+    BOOST_CHECK_EQUAL( ns.object<SomeClass>().get("data").to_string(), "data member" );
+}
+
+BOOST_AUTO_TEST_CASE( test_import )
+{
+    Namespace source_ns;
+    source_ns.register_type<SomeClass>("SomeClass")
+        .add_readonly("data", &SomeClass::data_member)
+    ;
+    source_ns.register_type<std::string>("string");
+
+    Namespace ns;
+    BOOST_CHECK_THROW( ns.object<SomeClass>(), TypeError );
+
+    ns.import(source_ns);
+    BOOST_CHECK_NO_THROW( ns.object<SomeClass>() );
+    BOOST_CHECK_EQUAL( ns.object<SomeClass>().get("data").to_string(), "data member" );
+}

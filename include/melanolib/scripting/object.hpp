@@ -303,7 +303,7 @@ namespace wrapper {
     class TypeWrapper
     {
     public:
-        TypeWrapper(std::string&& name, Namespace* parent_namespace)
+        TypeWrapper(std::string&& name, const Namespace* parent_namespace)
             : _name(std::move(name)),
             _parent_namespace(parent_namespace)
         {}
@@ -333,9 +333,30 @@ namespace wrapper {
          */
         virtual Object make_object(const Object::Arguments& arguments) const = 0;
 
+        /**
+         * \brief Moves to a different namespace
+         */
+        void migrate_to(const Namespace& parent_namespace)
+        {
+            _parent_namespace = &parent_namespace;
+        }
+
+        /**
+         * \brief Changes this type's name
+         */
+        void rename(const std::string& name)
+        {
+            _name = name;
+        }
+
+        /**
+         * \brief Creates a copy pf the run-time type
+         */
+        virtual std::unique_ptr<TypeWrapper> clone() const = 0;
+
     private:
         std::string _name;
-        Namespace* _parent_namespace;
+        const Namespace* _parent_namespace;
     };
 
 
@@ -653,6 +674,11 @@ namespace wrapper {
             return iter->second(this, owner);
         }
 
+        std::unique_ptr<TypeWrapper> clone() const override
+        {
+            return std::make_unique<ClassWrapper>(*this);
+        }
+
     private:
         detail::GetterMap<HeldType> getters;
         detail::UnregGetter<HeldType> _fallback_getter;
@@ -792,13 +818,33 @@ struct Registrar
  */
 class Namespace
 {
+private:
+    /**
+     * \note these two must appear before they are called for \b auto to work
+     */
+    const auto& find_type(const std::string& type_name) const
+    {
+        for ( const auto& p : classes )
+            if ( p.second->name() == type_name )
+                return p;
+        throw TypeError("Unregister type: " + type_name);
+    }
+
+    const auto& find_type(const std::type_info& type_info) const
+    {
+        auto iter = classes.find(type_info);
+        if ( iter == classes.end() )
+            throw TypeError("Unregistered type");
+        return *iter;
+    }
+
 public:
     /**
      * \brief Registers a type
      * \returns The registered class wrapper
      */
     template<class Type>
-    auto& register_type(const std::string& name)
+    typename Registrar<Type>::TypeWrapper& register_type(const std::string& name)
     {
         auto ptr = Registrar<Type>::create_wrapper(name, this);
         auto& ref = *ptr;
@@ -811,7 +857,7 @@ public:
      * \returns The registered class wrapper
      */
     template<class Type>
-        wrapper::ClassWrapper<Type>& register_type()
+    typename Registrar<Type>::TypeWrapper& register_type()
     {
         return register_type<Type>(typeid(Type).name());
     }
@@ -920,16 +966,10 @@ public:
      * \note It's possible for multiple types to have the same name, if that
      * is the case it is not specified which one will be selected.
      */
-    Object object(const std::string& class_name, const Object::Arguments& args) const
+    Object object(const std::string& type_name, const Object::Arguments& args) const
     {
-        for ( const auto& p : classes )
-        {
-            if ( p.second->name() == class_name )
-            {
-                return p.second->make_object(args);
-            }
-        }
-        throw TypeError("Unregister type: " + class_name);
+        const auto& p = find_type(type_name);
+        return p.second->make_object(args);
     }
 
     template<class T>
@@ -948,6 +988,46 @@ public:
             return type.name();
         }
         return iter->second->name();
+    }
+
+    /**
+     * \brief Import a type definition from a different namespace
+     */
+    wrapper::TypeWrapper& import_type(const Namespace& source,
+                                      const std::string& type_name)
+    {
+        const auto& p = source.find_type(type_name);
+        auto& type_ptr = classes[p.first] = p.second->clone();
+        type_ptr->migrate_to(*this);
+        return *type_ptr;
+    }
+
+    wrapper::TypeWrapper& import_type(const Namespace& source,
+                                      const std::type_info& type_info)
+    {
+        const auto& p = source.find_type(type_info);
+        auto& type_ptr = classes[p.first] = p.second->clone();
+        type_ptr->migrate_to(*this);
+        return *type_ptr;
+    }
+
+    template<class T>
+    wrapper::TypeWrapper& import_type(const Namespace& source)
+    {
+        return import_type(source, typeid(T));
+    }
+
+    /**
+     * \brief Import all type definitions from a different namespace
+     */
+    void import(const Namespace& source)
+    {
+        for ( const auto& p : source.classes )
+        {
+            auto ptr = p.second->clone();
+            ptr->migrate_to(*this);
+            classes[p.first] = std::move(ptr);
+        }
     }
 
 private:
