@@ -303,9 +303,9 @@ namespace wrapper {
     class TypeWrapper
     {
     public:
-        TypeWrapper(std::string&& name, const Namespace* parent_namespace)
+        TypeWrapper(std::string&& name, const Namespace& parent_namespace)
             : _name(std::move(name)),
-            _parent_namespace(parent_namespace)
+            _parent_namespace(&parent_namespace)
         {}
 
         virtual ~TypeWrapper(){}
@@ -448,7 +448,7 @@ namespace wrapper {
     public:
         using HeldType = Class;
 
-        ClassWrapper(std::string name, Namespace* parent_namespace)
+        ClassWrapper(std::string name, const Namespace& parent_namespace)
             : TypeWrapper(std::move(name), parent_namespace)
         {}
 
@@ -801,14 +801,14 @@ struct Registrar
     using TypeWrapper = wrapper::ClassWrapper<Type>;
     using Pointer = std::unique_ptr<TypeWrapper>;
 
-    static Pointer create_wrapper(const std::string& name, Namespace* ns)
+    static Pointer create_wrapper(const std::string& name, Namespace& ns)
     {
         auto ptr = std::make_unique<TypeWrapper>(name, ns);
-        auto_register(*ptr);
+        auto_register(*ptr, ns);
         return ptr;
     }
 
-    static void auto_register(TypeWrapper& type)
+    static void auto_register(TypeWrapper& type, Namespace& ns)
     {
     }
 };
@@ -846,7 +846,7 @@ public:
     template<class Type>
     typename Registrar<Type>::TypeWrapper& register_type(const std::string& name)
     {
-        auto ptr = Registrar<Type>::create_wrapper(name, this);
+        auto ptr = Registrar<Type>::create_wrapper(name, *this);
         auto& ref = *ptr;
         classes[ptr->type_index()] = std::move(ptr);
         return ref;
@@ -860,6 +860,16 @@ public:
     typename Registrar<Type>::TypeWrapper& register_type()
     {
         return register_type<Type>(typeid(Type).name());
+    }
+
+    /**
+     * \brief Registers the type if it doesn't already exist
+     */
+    template<class Type>
+    void ensure_type(const std::string& name = "")
+    {
+        if ( !classes.count(typeid(Type)) )
+            register_type<Type>(name.empty() ? name : typeid(Type).name());
     }
 
     /**
@@ -1738,7 +1748,7 @@ private:
 };
 
 template<>
-void Registrar<SimpleType>::auto_register(TypeWrapper& type)
+void Registrar<SimpleType>::auto_register(TypeWrapper& type, Namespace& ns)
 {
     type.fallback_getter(&SimpleType::get);
     type.fallback_setter(&SimpleType::set);

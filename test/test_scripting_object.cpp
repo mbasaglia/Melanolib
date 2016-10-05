@@ -791,3 +791,21 @@ BOOST_AUTO_TEST_CASE( test_import )
     BOOST_CHECK_NO_THROW( ns.object<SomeClass>() );
     BOOST_CHECK_EQUAL( ns.object<SomeClass>().get("data").to_string(), "data member" );
 }
+
+BOOST_AUTO_TEST_CASE( test_ensure_type_existing )
+{
+    Namespace ns;
+    ns.register_type<SomeClass>("SomeClass")
+        .add_readonly("data", &SomeClass::data_member)
+    ;
+    ns.register_type<std::string>("string");
+    ns.ensure_type<SomeClass>("SomeClass");
+    BOOST_CHECK_EQUAL( ns.object<SomeClass>().get("data").to_string(), "data member" );
+}
+
+BOOST_AUTO_TEST_CASE( test_ensure_type_new )
+{
+    Namespace ns;
+    ns.ensure_type<SomeClass>("SomeClass");
+    BOOST_CHECK_NO_THROW( ns.object<SomeClass>() );
+}
