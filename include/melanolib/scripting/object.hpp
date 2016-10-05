@@ -766,7 +766,7 @@ namespace wrapper {
 
 /**
  * \brief Template used to register typesm
- * Specialize create_wrapper for customizable behavour or default attributes
+ * Specialize auto_register to add default attributes
  */
 template<class Type>
 struct Registrar
@@ -776,7 +776,13 @@ struct Registrar
 
     static Pointer create_wrapper(const std::string& name, Namespace* ns)
     {
-        return std::make_unique<TypeWrapper>(name, ns);
+        auto ptr = std::make_unique<TypeWrapper>(name, ns);
+        auto_register(*ptr);
+        return ptr;
+    }
+
+    static void auto_register(TypeWrapper& type)
+    {
     }
 };
 
@@ -1667,12 +1673,10 @@ private:
 };
 
 template<>
-Registrar<SimpleType>::Pointer Registrar<SimpleType>::create_wrapper(const std::string& name, Namespace* ns)
+void Registrar<SimpleType>::auto_register(TypeWrapper& type)
 {
-    auto ptr = std::make_unique<TypeWrapper>(name, ns);
-    ptr->fallback_getter(&SimpleType::get);
-    ptr->fallback_setter(&SimpleType::set);
-    return ptr;
+    type.fallback_getter(&SimpleType::get);
+    type.fallback_setter(&SimpleType::set);
 }
 
 } // namespace scripting
