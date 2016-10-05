@@ -47,7 +47,7 @@ public:
 
 BOOST_AUTO_TEST_CASE( test_to_string )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readonly("data", &SomeClass::data_member)
         .add_readonly("method", &SomeClass::member_function)
@@ -60,7 +60,7 @@ BOOST_AUTO_TEST_CASE( test_to_string )
 
 BOOST_AUTO_TEST_CASE( test_getter )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readonly("data", &SomeClass::data_member)
         .add_readonly("method", &SomeClass::member_function)
@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE( test_getter )
 
 BOOST_AUTO_TEST_CASE( test_class_not_found )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readonly("data", &SomeClass::data_member)
         .add_readonly("method", &SomeClass::member_function)
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE( test_class_not_found )
 
 BOOST_AUTO_TEST_CASE( test_builtin )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<int>();
 
     BOOST_CHECK_EQUAL( ns.object(123).to_string(), "123" );
@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE( test_builtin )
 
 BOOST_AUTO_TEST_CASE( test_register_type_name )
 {
-    Namespace ns;
+    TypeSystem ns;
     BOOST_CHECK_EQUAL( ns.register_type<int>().name(), typeid(int).name() );
     BOOST_CHECK_EQUAL( ns.register_type<float>("real").name(), "real" );
 }
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE( test_fallback_getter_member )
 {
     using Class = std::unordered_map<std::string, std::string>;
     using Ptr = const Class::mapped_type& (Class::*)(const Class::key_type&) const;
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<Class>()
         .add_readonly("size", &Class::size)
         .fallback_getter(Ptr(&Class::at))
@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE( test_fallback_getter_functor )
         {"foo", "bar"},
         {"hello", "world"},
     };
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readonly("data", &SomeClass::data_member)
         .fallback_getter([&map](const SomeClass& obj, const std::string& name){
@@ -156,7 +156,7 @@ BOOST_AUTO_TEST_CASE( test_fallback_getter_functor_no_object )
         {"foo", "bar"},
         {"hello", "world"},
     };
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readonly("data", &SomeClass::data_member)
         .fallback_getter([&map](const std::string& name){
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE( test_fallback_getter_functor_no_object )
 
 BOOST_AUTO_TEST_CASE( test_cast )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<int>();
     ns.register_type<float>();
 
@@ -184,7 +184,7 @@ BOOST_AUTO_TEST_CASE( test_cast )
 
 BOOST_AUTO_TEST_CASE( test_type_name )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<int>("Number");
 
     BOOST_CHECK_EQUAL( ns.type_name<int>(), "Number" );
@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE( test_type_name )
 
 BOOST_AUTO_TEST_CASE( test_has_type )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<int>();
     ns.register_type<float>();
 
@@ -226,7 +226,7 @@ struct SomeClassWithMethods
 
 BOOST_AUTO_TEST_CASE( test_method_access_method )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClassWithMethods>()
         .add_readonly("data", &SomeClassWithMethods::data)
         .add_method("method_noargs", &SomeClassWithMethods::method_noargs)
@@ -254,7 +254,7 @@ std::string function_const(const SomeClass& obj, const std::string& arg)
 
 BOOST_AUTO_TEST_CASE( test_method_access_functor_object_const )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>()
         .add_method("lambda_noargs", [](const SomeClass& obj) {
             return obj.data_member;
@@ -287,7 +287,7 @@ std::string function_noconst(SomeClass& obj, const std::string& arg)
 
 BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noconst )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>()
         .add_method("lambda_noargs", [](SomeClass& obj) {
             return obj.data_member;
@@ -315,7 +315,7 @@ std::string function_noobject(const std::string& arg)
 
 BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noobject )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>()
         .add_method("lambda_noargs", []() {
             return std::string("noargs");
@@ -338,7 +338,7 @@ BOOST_AUTO_TEST_CASE( test_method_access_functor_object_noobject )
 
 BOOST_AUTO_TEST_CASE( test_method_overload )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClassWithMethods>()
         .add_readonly("data", &SomeClassWithMethods::data)
         .add_method("method", &SomeClassWithMethods::method_noargs)
@@ -377,7 +377,7 @@ struct SettableClass
 BOOST_AUTO_TEST_CASE( test_setter )
 {
     std::string other_value;
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SettableClass>()
         .add_readwrite("attribute", &SettableClass::attribute)
         .add_readwrite("property", &SettableClass::getter, &SettableClass::setter)
@@ -432,7 +432,7 @@ struct FallbackClass
 
 BOOST_AUTO_TEST_CASE( test_fallback_setter_member )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<FallbackClass>()
         .fallback_getter(&FallbackClass::get)
         .fallback_setter(&FallbackClass::set)
@@ -447,7 +447,7 @@ BOOST_AUTO_TEST_CASE( test_fallback_setter_member )
 BOOST_AUTO_TEST_CASE( test_fallback_setter_functor )
 {
     std::unordered_map<std::string, std::string> map;
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>()
         .add_readonly("data", &SomeClass::data_member)
         .fallback_setter(
@@ -466,7 +466,7 @@ BOOST_AUTO_TEST_CASE( test_fallback_setter_functor )
 BOOST_AUTO_TEST_CASE( test_fallback_setter_functor_no_object )
 {
     std::unordered_map<std::string, std::string> map;
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>()
         .add_readonly("data", &SomeClass::data_member)
         .fallback_setter(
@@ -490,7 +490,7 @@ struct Constructible
 
 BOOST_AUTO_TEST_CASE( test_constructor_functor )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<Constructible>("Constructible")
         .add_readonly("data", &Constructible::data)
         .constructor([](const std::string& data){
@@ -508,7 +508,7 @@ BOOST_AUTO_TEST_CASE( test_constructor_functor )
 
 BOOST_AUTO_TEST_CASE( test_no_constructor )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<Constructible>("Constructible")
         .add_readonly("data", &Constructible::data)
     ;
@@ -520,7 +520,7 @@ BOOST_AUTO_TEST_CASE( test_no_constructor )
 
 BOOST_AUTO_TEST_CASE( test_constructor_noarg )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<Constructible>("Constructible")
         .add_readonly("data", &Constructible::data)
         .constructor([](){
@@ -534,7 +534,7 @@ BOOST_AUTO_TEST_CASE( test_constructor_noarg )
 
 BOOST_AUTO_TEST_CASE( test_constructor_raw )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<Constructible>("Constructible")
         .add_readonly("data", &Constructible::data)
         .constructor<std::string>()
@@ -550,7 +550,7 @@ BOOST_AUTO_TEST_CASE( test_constructor_raw )
 
 BOOST_AUTO_TEST_CASE( test_constructor_overload )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<Constructible>("Constructible")
         .add_readonly("data", &Constructible::data)
         .constructor([](const std::string& data){
@@ -572,7 +572,7 @@ BOOST_AUTO_TEST_CASE( test_constructor_overload )
 
 BOOST_AUTO_TEST_CASE( test_converter_explicit )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<int>()
         .conversion<float>([](int i) -> float { return i; })
     ;
@@ -589,7 +589,7 @@ BOOST_AUTO_TEST_CASE( test_converter_explicit )
 
 BOOST_AUTO_TEST_CASE( test_converter_implicit )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<int>()
         .conversion([](int i) -> float { return i; })
     ;
@@ -606,7 +606,7 @@ BOOST_AUTO_TEST_CASE( test_converter_implicit )
 
 BOOST_AUTO_TEST_CASE( test_reference_wrapping )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readwrite("data", &SomeClass::data_member)
     ;
@@ -621,7 +621,7 @@ BOOST_AUTO_TEST_CASE( test_reference_wrapping )
 
 BOOST_AUTO_TEST_CASE( test_reference_wrapping_ref_tag )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readwrite("data", &SomeClass::data_member)
     ;
@@ -636,7 +636,7 @@ BOOST_AUTO_TEST_CASE( test_reference_wrapping_ref_tag )
 
 BOOST_AUTO_TEST_CASE( test_reference_wrapping_policy )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readwrite("data", &SomeClass::data_member)
     ;
@@ -659,7 +659,7 @@ BOOST_AUTO_TEST_CASE( test_reference_wrapping_policy )
 BOOST_AUTO_TEST_CASE( test_reference_return_policy )
 {
     SomeClass child;
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readwrite("data", &SomeClass::data_member)
         .add_readonly("child",
@@ -681,7 +681,7 @@ BOOST_AUTO_TEST_CASE( test_reference_return_policy )
 BOOST_AUTO_TEST_CASE( test_reference_fixed_value_return_policy )
 {
     SomeClass child;
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readwrite("data", &SomeClass::data_member)
         .add_readonly("child", child, WrapReferencePolicy{})
@@ -712,7 +712,7 @@ BOOST_AUTO_TEST_CASE( test_reference_fixed_value_return_policy )
 
 BOOST_AUTO_TEST_CASE( test_object_forwarding )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<std::string>("string")
         .add_method("getobject", [&ns](){return ns.object<std::string>("bar");})
     ;
@@ -728,7 +728,7 @@ struct NestedClass
 
 BOOST_AUTO_TEST_CASE( test_reference_member_return_policy )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>()
         .add_readwrite("data", &SomeClass::data_member)
     ;
@@ -747,7 +747,7 @@ BOOST_AUTO_TEST_CASE( test_reference_member_return_policy )
 
 BOOST_AUTO_TEST_CASE( test_auto_register )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SimpleType>();
     ns.register_type<std::string>();
 
@@ -759,13 +759,13 @@ BOOST_AUTO_TEST_CASE( test_auto_register )
 
 BOOST_AUTO_TEST_CASE( test_import_type )
 {
-    Namespace source_ns;
+    TypeSystem source_ns;
     source_ns.register_type<SomeClass>("SomeClass")
         .add_readonly("data", &SomeClass::data_member)
     ;
     source_ns.register_type<std::string>("string");
 
-    Namespace ns;
+    TypeSystem ns;
     BOOST_CHECK_THROW( ns.object<SomeClass>(), TypeError );
 
     ns.import_type<SomeClass>(source_ns);
@@ -778,13 +778,13 @@ BOOST_AUTO_TEST_CASE( test_import_type )
 
 BOOST_AUTO_TEST_CASE( test_import )
 {
-    Namespace source_ns;
+    TypeSystem source_ns;
     source_ns.register_type<SomeClass>("SomeClass")
         .add_readonly("data", &SomeClass::data_member)
     ;
     source_ns.register_type<std::string>("string");
 
-    Namespace ns;
+    TypeSystem ns;
     BOOST_CHECK_THROW( ns.object<SomeClass>(), TypeError );
 
     ns.import(source_ns);
@@ -794,7 +794,7 @@ BOOST_AUTO_TEST_CASE( test_import )
 
 BOOST_AUTO_TEST_CASE( test_ensure_type_existing )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readonly("data", &SomeClass::data_member)
     ;
@@ -805,7 +805,7 @@ BOOST_AUTO_TEST_CASE( test_ensure_type_existing )
 
 BOOST_AUTO_TEST_CASE( test_ensure_type_new )
 {
-    Namespace ns;
+    TypeSystem ns;
     ns.ensure_type<SomeClass>("SomeClass");
     BOOST_CHECK_NO_THROW( ns.object<SomeClass>() );
 }

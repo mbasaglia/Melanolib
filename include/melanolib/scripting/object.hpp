@@ -35,7 +35,7 @@
 namespace melanolib {
 namespace scripting {
 
-class Namespace;
+class TypeSystem;
 class Object;
 
 namespace wrapper {
@@ -303,9 +303,9 @@ namespace wrapper {
     class TypeWrapper
     {
     public:
-        TypeWrapper(std::string&& name, const Namespace& parent_namespace)
+        TypeWrapper(std::string&& name, const TypeSystem& type_system)
             : _name(std::move(name)),
-            _parent_namespace(&parent_namespace)
+            _type_system(&type_system)
         {}
 
         virtual ~TypeWrapper(){}
@@ -323,9 +323,9 @@ namespace wrapper {
          */
         virtual std::type_index type_index() const noexcept = 0;
 
-        const Namespace& parent_namespace() const
+        const TypeSystem& type_system() const
         {
-            return *_parent_namespace;
+            return *_type_system;
         }
 
         /**
@@ -336,9 +336,9 @@ namespace wrapper {
         /**
          * \brief Moves to a different namespace
          */
-        void migrate_to(const Namespace& parent_namespace)
+        void migrate_to(const TypeSystem& type_system)
         {
-            _parent_namespace = &parent_namespace;
+            _type_system = &type_system;
         }
 
         /**
@@ -356,7 +356,7 @@ namespace wrapper {
 
     private:
         std::string _name;
-        const Namespace* _parent_namespace;
+        const TypeSystem* _type_system;
     };
 
 
@@ -448,8 +448,8 @@ namespace wrapper {
     public:
         using HeldType = Class;
 
-        ClassWrapper(std::string name, const Namespace& parent_namespace)
-            : TypeWrapper(std::move(name), parent_namespace)
+        ClassWrapper(std::string name, const TypeSystem& type_system)
+            : TypeWrapper(std::move(name), type_system)
         {}
 
         /**
@@ -669,7 +669,7 @@ namespace wrapper {
             if ( iter == converters.end() )
             {
                 throw MemberNotFound("Cannot convert " + name() + " to " +
-                    parent_namespace().type_name(type));
+                    type_system().type_name(type));
             }
             return iter->second(this, owner);
         }
@@ -801,14 +801,14 @@ struct Registrar
     using TypeWrapper = wrapper::ClassWrapper<Type>;
     using Pointer = std::unique_ptr<TypeWrapper>;
 
-    static Pointer create_wrapper(const std::string& name, Namespace& ns)
+    static Pointer create_wrapper(const std::string& name, TypeSystem& ns)
     {
         auto ptr = std::make_unique<TypeWrapper>(name, ns);
         auto_register(*ptr, ns);
         return ptr;
     }
 
-    static void auto_register(TypeWrapper& type, Namespace& ns)
+    static void auto_register(TypeWrapper& type, TypeSystem& ns)
     {
     }
 };
@@ -816,7 +816,7 @@ struct Registrar
 /**
  * \brief Type registry
  */
-class Namespace
+class TypeSystem
 {
 private:
     /**
@@ -1003,7 +1003,7 @@ public:
     /**
      * \brief Import a type definition from a different namespace
      */
-    wrapper::TypeWrapper& import_type(const Namespace& source,
+    wrapper::TypeWrapper& import_type(const TypeSystem& source,
                                       const std::string& type_name)
     {
         const auto& p = source.find_type(type_name);
@@ -1012,7 +1012,7 @@ public:
         return *type_ptr;
     }
 
-    wrapper::TypeWrapper& import_type(const Namespace& source,
+    wrapper::TypeWrapper& import_type(const TypeSystem& source,
                                       const std::type_info& type_info)
     {
         const auto& p = source.find_type(type_info);
@@ -1022,7 +1022,7 @@ public:
     }
 
     template<class T>
-    wrapper::TypeWrapper& import_type(const Namespace& source)
+    wrapper::TypeWrapper& import_type(const TypeSystem& source)
     {
         return import_type(source, typeid(T));
     }
@@ -1030,7 +1030,7 @@ public:
     /**
      * \brief Import all type definitions from a different namespace
      */
-    void import(const Namespace& source)
+    void import(const TypeSystem& source)
     {
         for ( const auto& p : source.classes )
         {
@@ -1067,7 +1067,7 @@ namespace wrapper {
             {
                 Object operator()(const ClassWrapper<HeldType>* type, const HeldType& value) const
                 {
-                    return type->parent_namespace().bind(
+                    return type->type_system().bind(
                         GetterType::invoke(functor, value),
                         ReturnPolicy{}
                     );
@@ -1206,7 +1206,7 @@ namespace wrapper {
                     return [functor](const ClassWrapper<HeldType>* type,
                                      const HeldType& value,
                                      const std::string& name) {
-                        return type->parent_namespace().bind(
+                        return type->type_system().bind(
                             std::invoke(functor, &value, name),
                             ReturnPolicy{}
                         );
@@ -1228,7 +1228,7 @@ namespace wrapper {
                         const ClassWrapper<HeldType>* type,
                         const HeldType& value,
                         const std::string& name) {
-                        return type->parent_namespace().bind(
+                        return type->type_system().bind(
                             functor(value, name),
                             ReturnPolicy{}
                         );
@@ -1250,7 +1250,7 @@ namespace wrapper {
                         const ClassWrapper<HeldType>* type,
                         const HeldType&,
                         const std::string& name) {
-                        return type->parent_namespace().bind(
+                        return type->type_system().bind(
                             functor(name),
                             ReturnPolicy{}
                         );
@@ -1394,7 +1394,7 @@ namespace wrapper {
                     HeldType& value,
                     const Object::Arguments& args) const
                 {
-                    return type->parent_namespace().bind(
+                    return type->type_system().bind(
                         MethodType::template invoke<HeldType, Functor, Args...>(
                             functor, value, args,
                             std::make_index_sequence<sizeof...(Args)>{}
@@ -1525,7 +1525,7 @@ namespace wrapper {
                     typename Sig::argument_types_tag{},
                     [functor](const ClassWrapper<HeldType>* type,
                               const Object::Arguments& args) {
-                        return type->parent_namespace().bind(
+                        return type->type_system().bind(
                             ctor_helper<HeldType>(
                                 functor, args,
                                 typename Sig::argument_types_tag{},
@@ -1558,7 +1558,7 @@ namespace wrapper {
                     DummyTuple<Args...>(),
                     [](const ClassWrapper<HeldType>* type,
                            const Object::Arguments& args) {
-                        return type->parent_namespace().object(
+                        return type->type_system().object(
                             raw_ctor_helper<HeldType, Args...>(
                                 args,
                                 std::make_index_sequence<sizeof...(Args)>()
@@ -1679,7 +1679,7 @@ const T& Object::cast() const
         return ptr->get();
     throw TypeError(
         "Object is of type " + value->type().name() + ", not "
-        + value->type().parent_namespace().type_name<Type>()
+        + value->type().type_system().type_name<Type>()
     );
 }
 
@@ -1748,7 +1748,7 @@ private:
 };
 
 template<>
-void Registrar<SimpleType>::auto_register(TypeWrapper& type, Namespace& ns)
+void Registrar<SimpleType>::auto_register(TypeWrapper& type, TypeSystem& ns)
 {
     type.fallback_getter(&SimpleType::get);
     type.fallback_setter(&SimpleType::set);
