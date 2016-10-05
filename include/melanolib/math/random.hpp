@@ -22,6 +22,7 @@
 #define MELANOLIB_MATH_RANDOM_HPP
 
 #include <random>
+#include <limits>
 
 namespace melanolib {
 
@@ -38,14 +39,6 @@ inline std::random_device& random_device()
 
 } // namespace detail
 
-/**
- * \brief Get a uniform random integer
- */
-template<class Int>
-    Int random()
-    {
-        return std::uniform_int_distribution<Int>()(detail::random_device());
-    }
 
 /**
  * \brief Get a uniform random integer between \c min and \c max (inclusive)
@@ -53,7 +46,9 @@ template<class Int>
 template<class Int>
     Int random(Int min, Int max)
     {
-        return std::uniform_int_distribution<Int>(min, max)(detail::random_device());
+        using Distribution = std::uniform_int_distribution<Int>;
+        thread_local static Distribution dist;
+        return dist(detail::random_device(), typename Distribution::param_type(min, max));
     }
 
 /**
@@ -63,6 +58,15 @@ template<class Int>
     Int random(Int max)
     {
         return random<Int>(0, max);
+    }
+
+/**
+ * \brief Get a uniform random integer
+ */
+template<class Int>
+    Int random()
+    {
+        return random(std::numeric_limits<Int>::max());
     }
 
 /**
@@ -87,7 +91,9 @@ inline long random(long min, long max)
 template<class Float>
 Float random_real()
 {
-    return std::uniform_real_distribution<Float>()(detail::random_device());
+    using Distribution = std::uniform_real_distribution<Float>;
+    thread_local static Distribution dist;
+    return dist(detail::random_device());
 }
 
 /**
