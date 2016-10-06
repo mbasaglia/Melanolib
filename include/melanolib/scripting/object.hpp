@@ -28,6 +28,8 @@
 #include <memory>
 #include <sstream>
 #include <utility>
+#include <algorithm>
+#include <deque>
 
 #include "melanolib/utils/type_utils.hpp"
 #include "melanolib/utils/c++-compat.hpp"
@@ -334,14 +336,6 @@ namespace wrapper {
         virtual Object make_object(const Object::Arguments& arguments) const = 0;
 
         /**
-         * \brief Moves to a different namespace
-         */
-        void migrate_to(const TypeSystem& type_system)
-        {
-            _type_system = &type_system;
-        }
-
-        /**
          * \brief Changes this type's name
          */
         void rename(const std::string& name)
@@ -354,9 +348,45 @@ namespace wrapper {
          */
         virtual std::unique_ptr<TypeWrapper> clone() const = 0;
 
+        /**
+         * \brief Searches the inheritance tree (Breadth-first)
+         *        to check if it inherits the given type
+         */
+        bool inherits(const TypeWrapper& wrapper) const
+        {
+            std::deque<const TypeWrapper*> wrappers;
+            wrappers.push_back(this);
+            while ( !wrappers.empty() )
+            {
+                auto top = wrappers.front();
+                wrappers.pop_front();
+                if ( top == &wrapper )
+                    return true;
+                wrappers.insert(wrappers.end(), top->supertypes.begin(), top->supertypes.end());
+            }
+            return false;
+        }
+
+    protected:
+        void inherit(const TypeWrapper& parent)
+        {
+            supertypes.push_back(&parent);
+        }
+
     private:
+        /**
+         * \brief Moves to a different namespace
+         */
+        void migrate_to(const TypeSystem& type_system)
+        {
+            _type_system = &type_system;
+        }
+
         std::string _name;
         const TypeSystem* _type_system;
+        std::vector<const TypeWrapper*> supertypes;
+
+        friend TypeSystem;
     };
 
 
@@ -589,6 +619,14 @@ namespace wrapper {
          */
         template<class Functor, class ReturnPolicy = CopyPolicy>
             ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {});
+
+        /**
+         * \brief Exposes inheritance
+         * \tparam T Type registered on the same type system
+         */
+        template<class T>
+        ClassWrapper& inherit();
+        ClassWrapper& inherit(const std::string& type_name);
 
         std::type_index type_index() const noexcept override
         {
@@ -825,26 +863,6 @@ struct Registrar
  */
 class TypeSystem
 {
-private:
-    /**
-     * \note these two must appear before they are called for \b auto to work
-     */
-    const auto& find_type(const std::string& type_name) const
-    {
-        for ( const auto& p : classes )
-            if ( p.second->name() == type_name )
-                return p;
-        throw TypeError("Unregister type: " + type_name);
-    }
-
-    const auto& find_type(const std::type_info& type_info) const
-    {
-        auto iter = classes.find(type_info);
-        if ( iter == classes.end() )
-            throw TypeError("Unregistered type");
-        return *iter;
-    }
-
 public:
     /**
      * \brief Registers a type
@@ -1009,29 +1027,33 @@ public:
 
     /**
      * \brief Import a type definition from a different namespace
+     * \param source Type system to copy the type from
+     * \param type_name Name of the type to copy from \p source
+     * \param clear_inheritance Whether to clear supertype info.
+     * If \b false and the type has supertypes, an exception will be thrown
      */
-    wrapper::TypeWrapper& import_type(const TypeSystem& source,
-                                      const std::string& type_name)
+    wrapper::TypeWrapper& import_type(
+        const TypeSystem& source,
+        const std::string& type_name,
+        bool clear_inheritance = false)
     {
-        const auto& p = source.find_type(type_name);
-        auto& type_ptr = classes[p.first] = p.second->clone();
-        type_ptr->migrate_to(*this);
-        return *type_ptr;
+        return import_single(source.find_type(type_name), clear_inheritance);
     }
 
-    wrapper::TypeWrapper& import_type(const TypeSystem& source,
-                                      const std::type_info& type_info)
+    wrapper::TypeWrapper& import_type(
+        const TypeSystem& source,
+        const std::type_info& type_info,
+        bool clear_inheritance = false)
     {
-        const auto& p = source.find_type(type_info);
-        auto& type_ptr = classes[p.first] = p.second->clone();
-        type_ptr->migrate_to(*this);
-        return *type_ptr;
+        return import_single(source.find_type(type_info), clear_inheritance);
     }
 
     template<class T>
-    wrapper::TypeWrapper& import_type(const TypeSystem& source)
+    wrapper::TypeWrapper& import_type(
+        const TypeSystem& source,
+        bool clear_inheritance = false)
     {
-        return import_type(source, typeid(T));
+        return import_type(source, typeid(T), clear_inheritance);
     }
 
     /**
@@ -1039,15 +1061,44 @@ public:
      */
     void import(const TypeSystem& source)
     {
+        std::unordered_map<const wrapper::TypeWrapper*, const wrapper::TypeWrapper*> transform;
         for ( const auto& p : source.classes )
         {
             auto ptr = p.second->clone();
             ptr->migrate_to(*this);
+            transform[p.second.get()] = ptr.get();
             classes[p.first] = std::move(ptr);
         }
+
+        for ( auto& type : classes )
+            std::transform(
+                type.second->supertypes.begin(),
+                type.second->supertypes.end(),
+                type.second->supertypes.begin(),
+                [&transform](const wrapper::TypeWrapper* from)
+                { return transform[from]; }
+            );
     }
 
+    /**
+     * \brief Returns a reference to the wrapper for the given type
+     * \throws TypeError if the type has not been registered
+     */
+    const wrapper::TypeWrapper& wrapper_for(const std::string& type_name) const
+    {
+        return *find_type(type_name).second;
+    }
+
+    template<class T>
+        const wrapper::TypeWrapper& wrapper_for() const
+        {
+            return *find_type(typeid(T)).second;
+        }
+
 private:
+    using TypeMap = std::unordered_map<std::type_index, std::unique_ptr<wrapper::TypeWrapper>>;
+    using TypeItem = TypeMap::value_type;
+
     template<class Class, class Ctor>
     Object build_object(Ctor&& ctor_arg) const
     {
@@ -1060,7 +1111,33 @@ private:
         ));
     }
 
-    std::unordered_map<std::type_index, std::unique_ptr<wrapper::TypeWrapper>> classes;
+    const TypeItem& find_type(const std::string& type_name) const
+    {
+        for ( const TypeItem& p : classes )
+            if ( p.second->name() == type_name )
+                return p;
+        throw TypeError("Unregister type: " + type_name);
+    }
+
+    const TypeItem& find_type(const std::type_info& type_info) const
+    {
+        auto iter = classes.find(type_info);
+        if ( iter == classes.end() )
+            throw TypeError("Unregistered type");
+        return *iter;
+    }
+
+    wrapper::TypeWrapper& import_single(const TypeItem& pair, bool clear_inheritance)
+    {
+        if ( !pair.second->supertypes.empty() && !clear_inheritance )
+            throw TypeError("Cannot import single type as it has supertypes");
+        auto& type_ptr = classes[pair.first] = pair.second->clone();
+        type_ptr->migrate_to(*this);
+        type_ptr->supertypes.clear();
+        return *type_ptr;
+    }
+
+    TypeMap classes;
 };
 
 namespace wrapper {
@@ -1674,6 +1751,19 @@ namespace wrapper {
             using Target = std::decay_t<typename GetterType::ReturnType>;
             converters[typeid(Target)] = std::move(getter);
             return *this;
+        }
+
+    template<class Class>
+    template<class T>
+        ClassWrapper<Class>& ClassWrapper<Class>::inherit()
+        {
+            TypeWrapper::inherit(type_system().template wrapper_for<T>());
+        }
+
+    template<class Class>
+        ClassWrapper<Class>& ClassWrapper<Class>::inherit(const std::string& type_name)
+        {
+            TypeWrapper::inherit(type_system().wrapper_for(type_name));
         }
 
 } // namespace wrapper
