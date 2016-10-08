@@ -771,7 +771,7 @@ struct Stringizer
 };
 
 template<>
-std::string Stringizer<std::string>::operator()(
+inline std::string Stringizer<std::string>::operator()(
     const std::string& value, const wrapper::TypeWrapper& type) const
 {
     return value;
@@ -1781,13 +1781,13 @@ const T& Object::cast() const
 }
 
 template<>
-const Object& Object::cast<const Object&>() const
+inline const Object& Object::cast<const Object&>() const
 {
     return *this;
 }
 
 template<>
-const Object& Object::cast<Object>() const
+inline const Object& Object::cast<Object>() const
 {
     return *this;
 }
@@ -1810,13 +1810,13 @@ Object Object::converted() const
 }
 
 template<>
-Object Object::converted<Object>() const
+inline Object Object::converted<Object>() const
 {
     return *this;
 }
 
 template<>
-Object Object::converted<const Object&>() const
+inline Object Object::converted<const Object&>() const
 {
     return *this;
 }
@@ -1845,7 +1845,7 @@ private:
 };
 
 template<>
-void Registrar<SimpleType>::auto_register(TypeWrapper& type, TypeSystem& ns)
+inline void Registrar<SimpleType>::auto_register(TypeWrapper& type, TypeSystem& ns)
 {
     type.fallback_getter(&SimpleType::get);
     type.fallback_setter(&SimpleType::set);
