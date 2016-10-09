@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-
+#include <boost/optional.hpp> // This is needed to trigger potential issues with boost::get
 #include "melanolib/scripting/object.hpp"
 
 #define BOOST_TEST_MODULE Test_String
@@ -803,9 +803,48 @@ BOOST_AUTO_TEST_CASE( test_ensure_type_existing )
     BOOST_CHECK_EQUAL( ns.object<SomeClass>().get("data").to_string(), "data member" );
 }
 
-BOOST_AUTO_TEST_CASE( test_ensure_type_new )
+struct NoCopy
+{
+    NoCopy() = default;
+    NoCopy(const NoCopy&) = delete;
+    NoCopy& operator=(const NoCopy&) = delete;
+    std::string data = "data member";
+};
+
+BOOST_AUTO_TEST_CASE( test_nocopy )
 {
     TypeSystem ns;
-    ns.ensure_type<SomeClass>("SomeClass");
-    BOOST_CHECK_NO_THROW( ns.object<SomeClass>() );
+    ns.register_type<NoCopy>().add_readonly("data", &NoCopy::data);
+    ns.register_type<std::string>();
+    NoCopy obj;
+    auto dynamic = ns.reference(obj);
+    BOOST_CHECK_EQUAL( dynamic.get("data").to_string(), obj.data );
+}
+
+struct VirtualBase
+{
+    virtual ~VirtualBase() = default;
+    virtual std::string method() const = 0;
+};
+
+struct VirtualDerived: VirtualBase
+{
+    std::string method() const override
+    {
+        return "foo";
+    }
+};
+
+BOOST_AUTO_TEST_CASE( test_abstract )
+{
+    TypeSystem ns;
+    ns.register_type<VirtualBase>("VirtualBase")
+        .add_readonly("method", &VirtualBase::method)
+    ;
+    ns.register_type<std::string>();
+    VirtualDerived obj;
+    auto dynamic = ns.reference<VirtualBase>(obj);
+    BOOST_CHECK_EQUAL( dynamic.get("method").to_string(), obj.method() );
+    BOOST_CHECK_EQUAL( &dynamic.cast<VirtualBase>(), &obj );
+    BOOST_CHECK_EQUAL( dynamic.to_string(), "VirtualBase" );
 }

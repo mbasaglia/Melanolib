@@ -261,11 +261,11 @@ struct CopyPolicy{};
 struct WrapReferencePolicy{};
 
 /**
- * \brief Object used to store values, by default stores a copy.
+ * \brief Object used to store values, by default stores a copy or a pointer
  *
  * Specialize if a different behaviour is required
  */
-template<class T>
+template<class T, bool NoByValue = std::is_abstract<T>::value>
     struct ValueHolder
 {
     ValueHolder(const T& value)
@@ -295,6 +295,30 @@ template<class T>
     }
 
     melanolib::Variant<T, T*> holder;
+};
+
+template<class T>
+    struct ValueHolder<T, true>
+{
+    ValueHolder(T* pointer)
+        : holder(pointer)
+    {}
+
+    ValueHolder(const Ref<T>& reference)
+        : holder(&reference.get())
+    {}
+
+    const T& get() const
+    {
+        return *holder;
+    }
+
+    T& get()
+    {
+        return *holder;
+    }
+
+    T* holder;
 };
 
 namespace wrapper {
