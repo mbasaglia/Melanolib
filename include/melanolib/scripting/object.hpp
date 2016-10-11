@@ -1022,6 +1022,26 @@ public:
     }
 
     /**
+     * \brief Creates an object wrapper around the reference
+     * \throws TypeError if \p Class has not been registered with register_type
+     */
+    template<class Class>
+    Object bind(const Ref<Class>& value, WrapReferencePolicy) const
+    {
+        return reference(value.get());
+    }
+
+    /**
+     * \brief Creates an object wrapper around the reference
+     * \throws TypeError if \p Class has not been registered with register_type
+     */
+    template<class Class>
+    Object bind(Ref<Class>& value, WrapReferencePolicy) const
+    {
+        return reference(value.get());
+    }
+
+    /**
      * \warning Evil bind, needed to bind direct members as getters that should
      *          be wrapped as references (which can't be const by definition)
      */
