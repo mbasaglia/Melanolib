@@ -848,3 +848,35 @@ BOOST_AUTO_TEST_CASE( test_abstract )
     BOOST_CHECK_EQUAL( &dynamic.cast<VirtualBase>(), &obj );
     BOOST_CHECK_EQUAL( dynamic.to_string(), "VirtualBase" );
 }
+
+BOOST_AUTO_TEST_CASE( test_iterable )
+{
+    TypeSystem ns;
+    ns.register_type<std::vector<std::string>>("Array")
+        .make_iterable()
+    ;
+    ns.register_type<std::string>();
+    std::vector<std::string> array{"foo", "bar"};
+    auto dynamic = ns.reference(array);
+    std::string out;
+    dynamic.iterate([&out](const Object& obj){ out += obj.to_string(); });
+    BOOST_CHECK_EQUAL( out, "foobar" );
+}
+
+BOOST_AUTO_TEST_CASE( test_iterable_functor )
+{
+    TypeSystem ns;
+    ns.register_type<std::vector<std::string>>("Array")
+        .make_iterable(
+            [](std::vector<std::string>& vec){ return vec.rbegin(); },
+            [](std::vector<std::string>& vec){ return vec.rend(); }
+        )
+    ;
+    ns.register_type<std::string>();
+    std::vector<std::string> array{"foo", "bar"};
+    auto dynamic = ns.reference(array);
+    std::string out;
+    dynamic.iterate([&out](const Object& obj){ out += obj.to_string(); });
+    BOOST_CHECK_EQUAL( out, "barfoo" );
+}
+

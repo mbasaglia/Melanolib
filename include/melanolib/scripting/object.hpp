@@ -42,6 +42,7 @@ class Object;
 
 namespace wrapper {
     class TypeWrapper;
+    using IteratorCallback = std::function<void (const Object&)>;
 
     /**
      * \brief Base class to erase the type of an object
@@ -91,6 +92,8 @@ namespace wrapper {
          * \brief Converts to an object of a different type
          */
         virtual Object converted(const std::type_info& type) const = 0;
+
+        virtual void iterate(const IteratorCallback& callback) = 0;
 
     private:
         const TypeWrapper* _type;
@@ -191,6 +194,16 @@ public:
     std::string to_string() const
     {
         return value->to_string();
+    }
+
+    /**
+     * \brief Calls func with each element (for list-like objects)
+     * \param Functor functor taking an Object as argument
+     */
+    template<class Functor>
+    void iterate(Functor&& func) const
+    {
+        return value->iterate(std::forward<Functor>(func));
     }
 
     /**
@@ -491,6 +504,12 @@ namespace wrapper {
         template<class HeldType>
             using ConverterMap = std::unordered_map<std::type_index, Getter<HeldType>>;
 
+        template<class HeldType>
+            using Iterator = std::function<void(
+                const ClassWrapper<HeldType>*,
+                HeldType&,
+                const IteratorCallback&)>;
+
     } // namespace detail
 
     /**
@@ -645,6 +664,54 @@ namespace wrapper {
             ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {});
 
         /**
+         * \brief Makes a type iterable by using std::begin and std::end
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the values dereferenced from the iterators
+         */
+        template<class ReturnPolicy = CopyPolicy>
+            ClassWrapper& make_iterable(ReturnPolicy = {})
+        {
+            iterator = [](
+                const ClassWrapper* type,
+                HeldType& value,
+                const std::function<void (const Object&)>& callback )
+            {
+                auto iter = std::begin(value);
+                auto enditer = std::end(value);
+                for ( ; iter != enditer; ++iter )
+                {
+                    callback(type->type_system().bind(*iter, ReturnPolicy{}));
+                }
+            };
+            return *this;
+        }
+
+        /**
+         * \brief Makes a type iterable by using two functor
+         * \tparam Begin An object invokable with a reference to HeldType
+         * \tparam End An object invokable with a reference to HeldType
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the values dereferenced from the iterators
+         */
+        template<class Begin, class End, class ReturnPolicy = CopyPolicy>
+            ClassWrapper& make_iterable(const Begin& begin, const End& end, ReturnPolicy = {})
+        {
+            iterator = [begin, end](
+                const ClassWrapper* type,
+                HeldType& value,
+                const std::function<void (const Object&)>& callback )
+            {
+                auto iter = std::invoke(begin, value);
+                auto enditer = std::invoke(end, value);
+                for ( ; iter != enditer; ++iter )
+                {
+                    callback(type->type_system().bind(*iter, ReturnPolicy{}));
+                }
+            };
+            return *this;
+        }
+
+        /**
          * \brief Exposes inheritance
          * \tparam T Type registered on the same type system
          */
@@ -741,6 +808,11 @@ namespace wrapper {
             return std::make_unique<ClassWrapper>(*this);
         }
 
+        void iterate(HeldType& owner, const IteratorCallback& callback) const
+        {
+            iterator(this, owner, callback);
+        }
+
     private:
         detail::GetterMap<HeldType> getters;
         detail::UnregGetter<HeldType> _fallback_getter;
@@ -749,6 +821,7 @@ namespace wrapper {
         detail::UnregSetter<HeldType> _fallback_setter;
         detail::ConstrorList<HeldType> _constructors;
         detail::ConverterMap<HeldType> converters;
+        detail::Iterator<HeldType> iterator;
     };
 
 } // namespace wrapper
@@ -852,6 +925,11 @@ namespace wrapper {
         Object converted(const std::type_info& type) const override
         {
             return class_wrapper().convert(value.get(), type);
+        }
+
+        void iterate(const IteratorCallback& callback) override
+        {
+            class_wrapper().iterate(value.get(), callback);
         }
 
     private:
