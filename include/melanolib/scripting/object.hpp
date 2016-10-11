@@ -810,6 +810,8 @@ namespace wrapper {
 
         void iterate(HeldType& owner, const IteratorCallback& callback) const
         {
+            if ( !iterator )
+                throw MemberNotFound("Cannot iterate " + name());
             iterator(this, owner, callback);
         }
 
