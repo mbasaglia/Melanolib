@@ -1221,7 +1221,7 @@ private:
     {
         auto iter = classes.find(typeid(Class));
         if ( iter == classes.end() )
-            throw TypeError("Unregister type");
+            throw TypeError("Unregistered type");
         return Object(std::make_shared<wrapper::ObjectWrapper<Class>>(
             std::forward<Ctor>(ctor_arg),
             static_cast<wrapper::ClassWrapper<Class>*>(iter->second.get())
@@ -1233,7 +1233,7 @@ private:
         for ( const TypeItem& p : classes )
             if ( p.second->name() == type_name )
                 return p;
-        throw TypeError("Unregister type: " + type_name);
+        throw TypeError("Unregistered type: " + type_name);
     }
 
     const TypeItem& find_type(const std::type_info& type_info) const
