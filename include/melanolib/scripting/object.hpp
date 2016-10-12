@@ -66,7 +66,6 @@ namespace wrapper {
 
         /**
          * \brief Converts the contained value into a string
-         * \see Stringizer
          */
         virtual std::string to_string() const = 0;
 
@@ -510,6 +509,52 @@ namespace wrapper {
                 HeldType&,
                 const IteratorCallback&)>;
 
+        template<class HeldType>
+            using Stringizer = std::function<std::string(const HeldType&)>;
+
+
+        /**
+         * \brief String conversion for values that can be converted implicitly to a string
+         *        using streams.
+         */
+        template<class T>
+            std::enable_if_t<
+                std::is_convertible<T, std::string>::value,
+            std::string>
+            to_string(const T& value, const wrapper::TypeWrapper& type)
+        {
+            return value;
+        }
+
+        /**
+         * \brief String conversion for values that can be converted to a string
+         *        using streams.
+         */
+        template<class T>
+            std::enable_if_t<
+                StreamInsertable<T>::value &&
+                !std::is_convertible<T, std::string>::value,
+            std::string>
+            to_string(const T& value, const wrapper::TypeWrapper& type)
+        {
+            std::ostringstream stream;
+            stream << value;
+            return stream.str();
+        }
+
+        /**
+         * \brief String conversion for values that can't be converted to a string
+         */
+        template<class T>
+            std::enable_if_t<
+                !StreamInsertable<T>::value &&
+                !std::is_convertible<T, std::string>::value,
+            std::string>
+            to_string(const T&, const wrapper::TypeWrapper& type)
+        {
+            return type.name();
+        }
+
     } // namespace detail
 
     /**
@@ -664,6 +709,20 @@ namespace wrapper {
             ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {});
 
         /**
+         * \brief Exposes a function to be used for to_string
+         * \tparam Functor can be:
+         * * A pointer to a data member of HeldType
+         * * A pointer to a member function of HeldType taking no arguments
+         * * Any function object taking a const HeldType& argument
+         */
+        template<class Functor, class ReturnPolicy = CopyPolicy>
+            ClassWrapper& string_conversion(const Functor& functor)
+            {
+                stringizer = functor;
+                return *this;
+            }
+
+        /**
          * \brief Makes a type iterable by using two functor
          * \tparam Begin An object invokable with a reference to HeldType
          * \tparam End An object invokable with a reference to HeldType
@@ -808,6 +867,13 @@ namespace wrapper {
             iterator(this, owner, callback);
         }
 
+        std::string to_string(const HeldType& value) const
+        {
+            if ( stringizer )
+                return stringizer(value);
+            return detail::to_string(value, *this);
+        }
+
     private:
         detail::GetterMap<HeldType> getters;
         detail::UnregGetter<HeldType> _fallback_getter;
@@ -817,57 +883,10 @@ namespace wrapper {
         detail::ConstrorList<HeldType> _constructors;
         detail::ConverterMap<HeldType> converters;
         detail::Iterator<HeldType> iterator;
+        detail::Stringizer<HeldType> stringizer;
     };
 
 } // namespace wrapper
-
-/**
- * \brief Functor used to convert values to string
- *
- * The default behaviour is to use stream operators if available or fallback
- * to the name of the class.
- * Specialize if a different behaviour is required
- */
-template<class T>
-struct Stringizer
-{
-
-    std::string operator()(const T& value, const wrapper::TypeWrapper& type) const
-    {
-        return to_string(value, type);
-    }
-
-    /**
-     * \brief Conversion template for values that can be converted to a string
-     *        using streams.
-     */
-    template<class TT>
-        static std::enable_if_t<StreamInsertable<TT>::value, std::string>
-        to_string(const TT& value, const wrapper::TypeWrapper& type)
-    {
-        std::ostringstream stream;
-        stream << value;
-        return stream.str();
-    }
-
-    /**
-     * \brief Conversion template for values that need explicit conversions
-     */
-    template<class TT>
-        static std::enable_if_t<!StreamInsertable<TT>::value, std::string>
-        to_string(const TT&, const wrapper::TypeWrapper& type)
-    {
-        return type.name();
-    }
-
-};
-
-template<>
-inline std::string Stringizer<std::string>::operator()(
-    const std::string& value, const wrapper::TypeWrapper& type) const
-{
-    return value;
-}
 
 namespace wrapper {
 
@@ -888,7 +907,7 @@ namespace wrapper {
 
         std::string to_string() const override
         {
-            return Stringizer<Class>()(value.get(), type());
+            return class_wrapper().to_string(value.get());
         }
 
         Object get_child(const std::string& name) const override

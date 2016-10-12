@@ -22,7 +22,7 @@
 #include <boost/optional.hpp> // This is needed to trigger potential issues with boost::get
 #include "melanolib/scripting/object.hpp"
 
-#define BOOST_TEST_MODULE Test_String
+#define BOOST_TEST_MODULE Test_ScriptingObject
 
 #include <boost/test/unit_test.hpp>
 
@@ -914,4 +914,18 @@ BOOST_AUTO_TEST_CASE( test_iterable_filter )
         check += pair.first + ": " + std::to_string(pair.second) + "\n";
     }
     BOOST_CHECK_EQUAL( out, check );
+}
+
+BOOST_AUTO_TEST_CASE( test_custom_to_string )
+{
+    TypeSystem ns;
+    ns.register_type<SomeClass>("SomeClass")
+        .add_readonly("data", &SomeClass::data_member)
+        .string_conversion([](const SomeClass& obj){
+            return "SomeClass[" + obj.data_member + "]";
+        })
+    ;
+    ns.register_type<std::string>("string");
+
+    BOOST_CHECK_EQUAL( ns.object(SomeClass()).to_string(), "SomeClass[data member]" );
 }
