@@ -880,3 +880,38 @@ BOOST_AUTO_TEST_CASE( test_iterable_functor )
     BOOST_CHECK_EQUAL( out, "barfoo" );
 }
 
+BOOST_AUTO_TEST_CASE( test_iterable_filter )
+{
+    using ContainerType = std::unordered_map<std::string, int>;
+    TypeSystem ns;
+    ns.register_type<ContainerType>("Map")
+        .make_iterable(
+            melanolib::Begin{},
+            melanolib::End{},
+            [&ns](const ContainerType::value_type& pair){
+                auto object = ns.object<SimpleType>();
+                object.set("key", ns.object(pair.first));
+                object.set("value", ns.object(pair.second));
+                return object;
+            }
+        )
+    ;
+    ns.register_type<std::string>();
+    ns.register_type<int>();
+    ns.register_type<SimpleType>();
+
+    ContainerType container{{"foo", 123}, {"bar", 543}};
+    auto dynamic = ns.reference(container);
+    std::string out;
+    dynamic.iterate([&out](const Object& obj){
+        out += obj.get("key").to_string() + ": "
+            + obj.get("value").to_string() + "\n";
+    });
+
+    std::string check;
+    for ( const auto& pair : container )
+    {
+        check += pair.first + ": " + std::to_string(pair.second) + "\n";
+    }
+    BOOST_CHECK_EQUAL( out, check );
+}

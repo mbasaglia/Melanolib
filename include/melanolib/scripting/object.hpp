@@ -31,8 +31,8 @@
 #include <algorithm>
 #include <deque>
 
-#include "melanolib/utils/type_utils.hpp"
 #include "melanolib/utils/c++-compat.hpp"
+#include "melanolib/utils/functional.hpp"
 
 namespace melanolib {
 namespace scripting {
@@ -664,39 +664,21 @@ namespace wrapper {
             ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {});
 
         /**
-         * \brief Makes a type iterable by using std::begin and std::end
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the values dereferenced from the iterators
-         */
-        template<class ReturnPolicy = CopyPolicy>
-            ClassWrapper& make_iterable(ReturnPolicy = {})
-        {
-            iterator = [](
-                const ClassWrapper* type,
-                HeldType& value,
-                const std::function<void (const Object&)>& callback )
-            {
-                auto iter = std::begin(value);
-                auto enditer = std::end(value);
-                for ( ; iter != enditer; ++iter )
-                {
-                    callback(type->type_system().bind(*iter, ReturnPolicy{}));
-                }
-            };
-            return *this;
-        }
-
-        /**
          * \brief Makes a type iterable by using two functor
          * \tparam Begin An object invokable with a reference to HeldType
          * \tparam End An object invokable with a reference to HeldType
+         * \tparam Filter A functor invokable with the result of a dereferenced iterator
          * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the values dereferenced from the iterators
+         *                      how to bind the values returned by \p filter
          */
-        template<class Begin, class End, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& make_iterable(const Begin& begin, const End& end, ReturnPolicy = {})
+        template<class Begin, class End, class Filter = Identity, class ReturnPolicy = CopyPolicy>
+            ClassWrapper& make_iterable(
+                const Begin& begin,
+                const End& end,
+                const Filter& filter = {},
+                ReturnPolicy = {})
         {
-            iterator = [begin, end](
+            iterator = [begin, end, filter](
                 const ClassWrapper* type,
                 HeldType& value,
                 const std::function<void (const Object&)>& callback )
@@ -705,10 +687,21 @@ namespace wrapper {
                 auto enditer = std::invoke(end, value);
                 for ( ; iter != enditer; ++iter )
                 {
-                    callback(type->type_system().bind(*iter, ReturnPolicy{}));
+                    callback(type->type_system().bind(filter(*iter), ReturnPolicy{}));
                 }
             };
             return *this;
+        }
+
+        /**
+         * \brief Makes a type iterable by using std::begin and std::end
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the values dereferenced from the iterators
+         */
+        template<class ReturnPolicy = CopyPolicy>
+            ClassWrapper& make_iterable(ReturnPolicy = {})
+        {
+            return make_iterable(Begin{}, End{}, Identity{}, ReturnPolicy{});
         }
 
         /**

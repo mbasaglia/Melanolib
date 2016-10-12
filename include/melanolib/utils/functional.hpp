@@ -100,5 +100,41 @@ struct Noop
     }
 };
 
+/**
+ * \brief Identity function object
+ */
+struct Identity
+{
+    template<class T>
+    decltype(auto) operator()(T&& t) const
+    {
+        return std::forward<T>(t);
+    }
+};
+
+/**
+ * \brief Function object returning the begin iterator
+ */
+struct Begin
+{
+    template<class T>
+    decltype(auto) operator()(T&& t) const
+    {
+        return std::begin(std::forward<T>(t));
+    }
+};
+
+/**
+ * \brief Function object returning the begin iterator
+ */
+struct End
+{
+    template<class T>
+    decltype(auto) operator()(T&& t) const
+    {
+        return std::end(std::forward<T>(t));
+    }
+};
+
 } // namespace melanolib
 #endif // FUNCTIONAL_HPP
