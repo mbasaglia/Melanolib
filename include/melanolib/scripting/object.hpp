@@ -219,6 +219,11 @@ public:
     bool has_type() const;
 
     /**
+     * \brief Whether it's safe to call cast<T>() where typeid(T) == id
+     */
+    bool has_type(const std::type_index& id) const;
+
+    /**
      * \brief Convert the internal representation using its type registered conversions
      * \throw MemberNotFound if the conversion is not available
      */
@@ -462,7 +467,7 @@ namespace wrapper {
                 auto type_iter = types.begin();
                 for ( const Object& arg : args )
                 {
-                    if ( arg.type().type_index() != *type_iter )
+                    if ( !arg.has_type(*type_iter) )
                         return false;
                     ++type_iter;
                 }
@@ -1940,6 +1945,18 @@ bool Object::has_type() const
     return dynamic_cast<wrapper::ObjectWrapper<Type>*>(value.get());
 }
 
+template<>
+inline bool Object::has_type<const Object&>() const
+{
+    return true;
+}
+
+template<>
+inline bool Object::has_type<Object>() const
+{
+    return true;
+}
+
 
 template<class T>
 Object Object::converted() const
@@ -1960,6 +1977,15 @@ template<>
 inline Object Object::converted<const Object&>() const
 {
     return *this;
+}
+
+inline bool Object::has_type(const std::type_index& id) const
+{
+    if ( !has_value() )
+        return false;
+    if ( id == typeid(Object) )
+        return true;
+    return id == type().type_index();
 }
 
 /**
