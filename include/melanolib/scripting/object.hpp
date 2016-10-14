@@ -248,6 +248,11 @@ public:
         return converted<T>().cast<T>();
     }
 
+    bool has_value() const
+    {
+        return !!value;
+    }
+
 private:
     template<class Iter>
         Object get(Iter begin, Iter end) const
