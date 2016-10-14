@@ -138,6 +138,9 @@ template <class T, std::size_t Size>
         return Size;
     }
 } // namespace std
+#define CONSTEXPR_IF
+#else
+#define CONSTEXPR_IF constexpr
 #endif // C++17
 
 #ifndef __cpp_lib_invoke
