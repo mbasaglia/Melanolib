@@ -37,15 +37,13 @@ namespace string {
 
 /**
  * \brief Turn a container into a string
- * \pre Container::const_iterator is a ForwardIterator
- *      Container::value_type has the stream operator
+ * \pre FwIter::value_type has the stream operator
  * \note Should work on arrays just fine
  */
-template<class Container>
-    std::string implode(const std::string& glue, const Container& elements)
+template<class FwIter>
+    std::string implode(const std::string& glue, const FwIter& begin, const FwIter& end)
     {
-        auto iter = std::begin(elements);
-        auto end = std::end(elements);
+        auto iter = begin;
         if ( iter == end )
             return "";
 
@@ -61,6 +59,18 @@ template<class Container>
         }
 
         return ss.str();
+    }
+
+/**
+ * \brief Turn a container into a string
+ * \pre Container::const_iterator is a ForwardIterator
+ *      Container::value_type has the stream operator
+ * \note Should work on arrays just fine
+ */
+template<class Container>
+    std::string implode(const std::string& glue, const Container& elements)
+    {
+        return implode(glue, std::begin(elements), std::end(elements));
     }
 
 /**
