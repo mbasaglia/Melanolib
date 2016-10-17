@@ -100,25 +100,32 @@ namespace wrapper {
 }
 
 /**
- * \brief Exception thrown when trying to access a member that has not been exposed
+ * \brief Base class for errors
  */
-class MemberNotFound : public std::runtime_error
+class Error : public std::runtime_error
 {
 public:
-    explicit MemberNotFound(const std::string& message)
+    explicit Error(const std::string& message)
         : runtime_error(message)
     {}
 };
 
 /**
- * \brief Exception thrown when trying to access a type that has not been exposed
+ * \brief Exception thrown when trying to access a member that has not been exposed
  */
-class TypeError : public std::logic_error
+class MemberNotFound : public Error
 {
 public:
-    explicit TypeError(const std::string& message)
-        : logic_error(message)
-    {}
+    using Error::Error;
+};
+
+/**
+ * \brief Exception thrown when trying to access a type that has not been exposed
+ */
+class TypeError : public Error
+{
+public:
+    using Error::Error;
 };
 
 /**
