@@ -558,11 +558,8 @@ namespace wrapper {
         template<class HeldType>
             using UnregSetter = std::function<void(HeldType&, const std::string& name, const Object&)>;
 
-        template<class HeldType>
-            using Constructor = Overloadable<Object, 0, const ClassWrapper<HeldType>*>;
-
-        template<class HeldType>
-            using ConstrorList = std::vector<Constructor<HeldType>>;
+        using Constructor = Overloadable<Object, 0, const TypeWrapper*>;
+        using ConstructorList = std::vector<Constructor>;
 
         template<class HeldType>
             using ConverterMap = std::unordered_map<std::type_index, Getter<HeldType>>;
@@ -943,7 +940,7 @@ namespace wrapper {
         detail::MethodMap methods;
         detail::SetterMap<HeldType> setters;
         detail::UnregSetter<HeldType> _fallback_setter;
-        detail::ConstrorList<HeldType> _constructors;
+        detail::ConstructorList _constructors;
         detail::ConverterMap<HeldType> converters;
         detail::Iterator<HeldType> iterator;
         detail::Stringizer<HeldType> stringizer;
@@ -1672,175 +1669,147 @@ namespace wrapper {
                 }
         } // namespace setter
 
-        namespace function {
-            /**
-             * Constructor, Functor
+
+        template<class Functor, class ReturnPolicy, class... Args>
+        class FunctorWrapper
+        {
+        public:
+            Functor functor;
+
+            Object operator()(
+                const TypeWrapper* type,
+                const Object::Arguments& args) const
+            {
+                return call_and_bind(type, args, std::make_index_sequence<sizeof...(Args)>{});
+            }
+
+            Method method() const
+            {
+                return {DummyTuple<Args...>{}, *this};
+            }
+
+        private:
+            /*
+             * Invokable
              */
-            template<class HeldType, class Functor, class... Args, std::size_t... Indices>
-            HeldType ctor_helper(
-                Functor functor,
+            template<class... Args2, std::size_t... Indices>
+            auto invoke(
                 const Object::Arguments& args,
-                DummyTuple<Args...>,
-                std::index_sequence<Indices...>)
+                std::index_sequence<Indices...> seq,
+                const FunctorWrapper*
+            ) const
+                -> decltype(std::__invoke(functor, args[Indices].cast<Args2>()...))
             {
-                return std::invoke(functor, args[Indices].cast<Args>()...);
+                auto iter = args.begin();
+                if ( sizeof...(Args2) < args.size() )
+                    ++iter;
+                return std::__invoke(functor, iter[Indices].cast<Args2>()...);
             }
-
-            /** Constructor, Functor
-             * \brief Exposes a functor as a class constructor
-             */
-            template<class ReturnPolicy, class HeldType, class Functor>
-            Constructor<HeldType> wrap_ctor(Functor functor)
-            {
-                using Sig = FunctionSignature<Functor>;
-                return {
-                    typename Sig::argument_types_tag{},
-                    [functor](const ClassWrapper<HeldType>* type,
-                              const Object::Arguments& args) {
-                        return type->type_system().bind(
-                            ctor_helper<HeldType>(
-                                functor, args,
-                                typename Sig::argument_types_tag{},
-                                std::make_index_sequence<Sig::argument_count>()
-                            ),
-                            ReturnPolicy{}
-                        );
-                    }
-                };
-            }
-
-            /**
-             * Constructor
-             */
-            template<class HeldType, class... Args, std::size_t... Indices>
-            HeldType raw_ctor_helper(
-                const Object::Arguments& args,
-                std::index_sequence<Indices...>)
-            {
-                return HeldType(args[Indices].cast<Args>()...);
-            }
-
-            /** Constructor
-             * \brief Exposes a class constructor
-             */
-            template<class HeldType, class... Args>
-            Constructor<HeldType> wrap_raw_ctor()
-            {
-                return {
-                    DummyTuple<Args...>(),
-                    [](const ClassWrapper<HeldType>* type,
-                           const Object::Arguments& args) {
-                        return type->type_system().object(
-                            raw_ctor_helper<HeldType, Args...>(
-                                args,
-                                std::make_index_sequence<sizeof...(Args)>()
-                            )
-                        );
-                    }
-                };
-            }
-
-        } // namespace function
-
-        namespace function2 {
-
-            template<class Functor, class ReturnPolicy, class... Args>
-            class MethodBase
-            {
-            public:
-                Functor functor;
-
-                Object operator()(
-                    const TypeWrapper* type,
-                    const Object::Arguments& args) const
-                {
-                    return call_and_bind(type, args, std::make_index_sequence<sizeof...(Args)>{});
-                }
-
-                Method method() const
-                {
-                    return {DummyTuple<Args...>{}, *this};
-                }
-
-            private:
-                /*
-                 * Invokable
-                 */
-                template<class... Args2, std::size_t... Indices>
-                auto invoke(
-                    const Object::Arguments& args,
-                    std::index_sequence<Indices...> seq,
-                    const MethodBase*
-                ) const
-                    -> decltype(std::__invoke(functor, args[Indices].cast<Args2>()...))
-                {
-                    auto iter = args.begin();
-                    if ( sizeof...(Args2) < args.size() )
-                        ++iter;
-                    return std::__invoke(functor, iter[Indices].cast<Args2>()...);
-                }
-
-                /*
-                 * Not ivokable
-                 */
-                template<class... Args2, std::size_t... Indices>
-                decltype(auto) invoke(
-                    const Object::Arguments& args,
-                    std::index_sequence<Indices...>,
-                    const void*
-                ) const
-                {
-                    return functor;
-                }
-
-                template<std::size_t... Indices>
-                auto call_and_bind(
-                    const TypeWrapper* type,
-                    const Object::Arguments& args,
-                    std::index_sequence<Indices...> indices) const
-                -> std::enable_if_t<
-                    !std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
-                    Object>
-                {
-                    return type->type_system().bind(
-                        invoke<Args...>(args, indices, this),
-                        ReturnPolicy{}
-                    );
-                }
-
-                template<std::size_t... Indices>
-                auto call_and_bind(
-                    const TypeWrapper* type,
-                    const Object::Arguments& args,
-                    std::index_sequence<Indices...> indices) const
-                -> std::enable_if_t<
-                    std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
-                    Object>
-                {
-                    invoke<Args...>(args, indices, this);
-                    return Object({});
-                }
-            };
-
-            template<class ReturnPolicy, class Functor, class... Args>
-            MethodBase<Functor, ReturnPolicy, Args...>
-                resolve_method_arguments(Functor functor, DummyTuple<Args...>)
-            { return {functor}; }
 
             /*
-             * Exposes a functor as a method of the class
+             * Not ivokable
              */
-            template<class ReturnPolicy, class Functor>
-            Method wrap_functor(const std::string& name, Functor functor)
+            template<class... Args2, std::size_t... Indices>
+            decltype(auto) invoke(
+                const Object::Arguments& args,
+                std::index_sequence<Indices...>,
+                const void*
+            ) const
             {
-                using Sig = FunctionSignature<Functor>;
-                return resolve_method_arguments<ReturnPolicy>(
-                    functor,
-                    typename Sig::invoke_types_tag()
-                ).method();
+                return functor;
             }
 
-        } // namespace function
+            template<std::size_t... Indices>
+            auto call_and_bind(
+                const TypeWrapper* type,
+                const Object::Arguments& args,
+                std::index_sequence<Indices...> indices) const
+            -> std::enable_if_t<
+                !std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
+                Object>
+            {
+                return type->type_system().bind(
+                    invoke<Args...>(args, indices, this),
+                    ReturnPolicy{}
+                );
+            }
+
+            template<std::size_t... Indices>
+            auto call_and_bind(
+                const TypeWrapper* type,
+                const Object::Arguments& args,
+                std::index_sequence<Indices...> indices) const
+            -> std::enable_if_t<
+                std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
+                Object>
+            {
+                invoke<Args...>(args, indices, this);
+                return Object({});
+            }
+        };
+
+        template<class ReturnPolicy, class Functor, class... Args>
+        FunctorWrapper<Functor, ReturnPolicy, Args...>
+            resolve_method_arguments(Functor functor, DummyTuple<Args...>)
+        { return {functor}; }
+
+
+        template<class ReturnPolicy, class Functor>
+        Method wrap_method(Functor functor)
+        {
+            using Sig = FunctionSignature<Functor>;
+            return {
+                typename Sig::invoke_types_tag(),
+                resolve_method_arguments<ReturnPolicy>(
+                    functor,
+                    typename Sig::invoke_types_tag()
+                )
+            };
+        }
+
+        template<class ReturnPolicy, class Functor>
+        Constructor wrap_ctor(Functor functor)
+        {
+            using Sig = FunctionSignature<Functor>;
+            return {
+                typename Sig::invoke_types_tag(),
+                resolve_method_arguments<ReturnPolicy>(
+                    functor,
+                    typename Sig::invoke_types_tag()
+                )
+            };
+        }
+
+        /**
+            * Constructor
+            */
+        template<class Class, class... Args, std::size_t... Indices>
+        Class raw_ctor_helper(
+            const Object::Arguments& args,
+            std::index_sequence<Indices...>)
+        {
+            return Class(args[Indices].cast<Args>()...);
+        }
+
+        /** Constructor
+            * \brief Exposes a class constructor
+            */
+        template<class Class, class... Args>
+        Constructor wrap_raw_ctor()
+        {
+            return {
+                DummyTuple<Args...>(),
+                [](const TypeWrapper* type,
+                        const Object::Arguments& args) {
+                    return type->type_system().object(
+                        raw_ctor_helper<Class, Args...>(
+                            args,
+                            std::make_index_sequence<sizeof...(Args)>()
+                        )
+                    );
+                }
+            };
+        }
     } // namespace detail
 
     template<class Class>
@@ -1869,7 +1838,7 @@ namespace wrapper {
         {
             methods.insert({
                 name,
-                detail::function2::wrap_functor<ReturnPolicy>(name, value)
+                detail::wrap_method<ReturnPolicy>(value)
             });
             return *this;
         }
@@ -1897,7 +1866,7 @@ namespace wrapper {
         ClassWrapper<Class>& ClassWrapper<Class>::constructor(
             const T& functor, ReturnPolicy)
     {
-        _constructors.push_back(detail::function::wrap_ctor<ReturnPolicy, HeldType>(functor));
+        _constructors.push_back(detail::wrap_ctor<ReturnPolicy>(functor));
         return *this;
     }
 
@@ -1905,7 +1874,7 @@ namespace wrapper {
     template<class... Args>
         ClassWrapper<Class>& ClassWrapper<Class>::constructor()
     {
-        _constructors.push_back(detail::function::wrap_raw_ctor<HeldType, Args...>());
+        _constructors.push_back(detail::wrap_raw_ctor<HeldType, Args...>());
         return *this;
     }
 
