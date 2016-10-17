@@ -97,7 +97,47 @@ namespace wrapper {
     private:
         const TypeWrapper* _type;
     };
-}
+
+    namespace detail {
+
+        template<class T>
+        auto get_reference(const T& value)
+        ->std::enable_if_t<
+            !std::is_pointer<T>::value &&
+            !std::is_reference<T>::value,
+            const T&>
+        {
+            return value;
+        }
+
+        template<class T>
+        auto get_reference(std::remove_pointer_t<T>& value)
+        ->std::enable_if_t<
+            std::is_pointer<T>::value,
+            T>
+        {
+            return &value;
+        }
+
+        template<class T>
+        auto get_reference(T& value)
+        ->std::enable_if_t<
+            std::is_reference<T>::value,
+            T&>
+        {
+            return value;
+        }
+
+        template<class T>
+            using CastBase = std::decay_t<std::remove_pointer_t<std::decay_t<T>>>;
+
+        template<class T>
+            using CastResult = decltype(get_reference<T>(std::declval<CastBase<T>&>()));
+
+        template<class T>
+        CastResult<T> cast_helper(const Object& object, ValueWrapper* value);
+    } // namespace detail
+} // namespace wrapper
 
 /**
  * \brief Base class for errors
@@ -189,8 +229,9 @@ public:
      * \brief Invokes a member function
      * \throws MemberNotFound or TypeError
      */
-    Object call(const std::string& method, const Arguments& args) const
+    Object call(const std::string& method, Arguments args) const
     {
+        args.insert(args.begin(), *this);
         return value->call_method(method, args);
     }
 
@@ -217,7 +258,10 @@ public:
      * \throws TypeError if the type doesn't match
      */
     template<class T>
-    const T& cast() const;
+    decltype(auto) cast() const
+    {
+        return wrapper::detail::cast_helper<T>(*this, value.get());
+    }
 
     /**
      * \brief Whether it's safe to call cast<T>()
@@ -454,7 +498,7 @@ namespace wrapper {
         template<class HeldType>
             using UnregGetter = std::function<Object(const ClassWrapper<HeldType>*, const HeldType&, const std::string& name)>;
 
-        template<class Return, class... FixedArgs>
+        template<class Return, int can_skip, class... FixedArgs>
         class Overloadable
         {
         public:
@@ -464,19 +508,26 @@ namespace wrapper {
             template<class FunctorT, class... Args>
             Overloadable(DummyTuple<Args...>, FunctorT&& functor)
                 : functor(std::forward<FunctorT>(functor)),
-                  types({std::type_index(typeid(Args))...})
+                  types({std::type_index(typeid(std::remove_pointer_t<Args>))...})
             {}
 
             bool can_call(const Object::Arguments& args) const
             {
-                if ( args.size() != types.size() )
+                if ( args.size() < types.size() )
                     return false;
-                auto type_iter = types.begin();
-                for ( const Object& arg : args )
+
+                auto args_iter = args.begin();
+
+                if ( can_skip && args.size() == types.size() + can_skip )
+                    args_iter += can_skip;
+                else if ( args.size() != types.size() )
+                    return false;
+
+                for ( const auto& type : types )
                 {
-                    if ( !arg.has_type(*type_iter) )
+                    if ( !args_iter->has_type(type) )
                         return false;
-                    ++type_iter;
+                    ++args_iter;
                 }
                 return true;
             }
@@ -486,7 +537,7 @@ namespace wrapper {
              */
             Return operator()(FixedArgs... pre_args, const Object::Arguments& args) const
             {
-                if ( args.size() != types.size() )
+                if ( args.size() != types.size() && args.size() != types.size() + 1 )
                     throw TypeError("Wrong number of arguments");
                 return functor(pre_args..., args);
             }
@@ -495,12 +546,8 @@ namespace wrapper {
             TypeList types;
         };
 
-
-        template<class HeldType>
-            using Method = Overloadable<Object, const ClassWrapper<HeldType>*, HeldType&>;
-
-        template<class HeldType>
-            using MethodMap = std::unordered_multimap<std::string, Method<HeldType>>;
+        using Method = Overloadable<Object, 1, const TypeWrapper*>;
+        using MethodMap = std::unordered_multimap<std::string, Method>;
 
         template<class HeldType>
             using Setter = std::function<void(HeldType&, const Object&)>;
@@ -512,7 +559,7 @@ namespace wrapper {
             using UnregSetter = std::function<void(HeldType&, const std::string& name, const Object&)>;
 
         template<class HeldType>
-            using Constructor = Overloadable<Object, const ClassWrapper<HeldType>*>;
+            using Constructor = Overloadable<Object, 0, const ClassWrapper<HeldType>*>;
 
         template<class HeldType>
             using ConstrorList = std::vector<Constructor<HeldType>>;
@@ -837,7 +884,6 @@ namespace wrapper {
          * with one of the add_readonly() overloads
          */
         Object call_method(
-            HeldType& owner,
             const std::string& method,
             const Object::Arguments& arguments) const
         {
@@ -847,7 +893,7 @@ namespace wrapper {
 
             for ( auto it = range.first; it != range.second; ++it )
                 if ( it->second.can_call(arguments) )
-                    return it->second(this, owner, arguments);
+                    return it->second(this, arguments);
             throw MemberNotFound("No matching overload of \"" + method + "\" in " + name());
         }
 
@@ -894,7 +940,7 @@ namespace wrapper {
     private:
         detail::GetterMap<HeldType> getters;
         detail::UnregGetter<HeldType> _fallback_getter;
-        detail::MethodMap<HeldType> methods;
+        detail::MethodMap methods;
         detail::SetterMap<HeldType> setters;
         detail::UnregSetter<HeldType> _fallback_setter;
         detail::ConstrorList<HeldType> _constructors;
@@ -948,9 +994,14 @@ namespace wrapper {
             return value.get();
         }
 
+        Class& get()
+        {
+            return value.get();
+        }
+
         Object call_method(const std::string& name, const std::vector<Object>& args) override
         {
-            return class_wrapper().call_method(value.get(), name, args);
+            return class_wrapper().call_method(name, args);
         }
 
         Object converted(const std::type_info& type) const override
@@ -1622,122 +1673,6 @@ namespace wrapper {
         } // namespace setter
 
         namespace function {
-
-            template<class MethodType, class HeldType, class Functor, class ReturnPolicy, class... Args>
-            struct MethodBase
-            {
-                auto operator()(
-                    const ClassWrapper<HeldType>* type,
-                    HeldType& value,
-                    const Object::Arguments& args) const
-                {
-                    return type->type_system().bind(
-                        MethodType::template invoke<HeldType, Functor, Args...>(
-                            functor, value, args,
-                            std::make_index_sequence<sizeof...(Args)>{}
-                        ),
-                        ReturnPolicy{}
-                    );
-                }
-
-                Method<HeldType> method() const
-                {
-                    return {DummyTuple<Args...>{}, *this};
-                }
-
-                Functor functor;
-            };
-
-            /*
-             * Member function or functor taking a pointer as first argument
-             */
-            struct MethodPointer
-            {
-                template<class HeldType, class Functor, class... Args, std::size_t... Indices>
-                    static auto invoke(const Functor& functor,
-                                       HeldType& value,
-                                       const Object::Arguments& args,
-                                       std::index_sequence<Indices...>)
-                    {
-                        return  std::invoke(functor, value, args[Indices].cast<Args>()...);
-                    }
-            };
-
-            template<class ReturnPolicy, class HeldType, class Functor, class... Args>
-            auto call_helper(Functor functor, DummyTuple<Args...>)
-            -> std::enable_if_t<
-                std::is_member_function_pointer<Functor>::value ||
-                IsCallableAnyReturn<Functor, HeldType*, Args...>::value,
-                MethodBase<MethodPointer, HeldType, Functor, ReturnPolicy, Args...>
-            > { return {functor}; }
-
-            /*
-             * Function object/pointer taking a reference or value as first argument
-             */
-            struct MethodReference
-            {
-                template<class HeldType, class Functor, class... Args, std::size_t... Indices>
-                    static auto invoke(const Functor& functor,
-                                       HeldType& value,
-                                       const Object::Arguments& args,
-                                       std::index_sequence<Indices...>)
-                    {
-                        return std::invoke(functor, value, args[Indices].cast<Args>()...);
-                    }
-            };
-            template<class ReturnPolicy, class HeldType, class Functor, class Head, class... Args>
-            auto call_helper(Functor functor, DummyTuple<Head, Args...>)
-            -> std::enable_if_t<
-                IsCallableAnyReturn<Functor, HeldType&, Args...>::value,
-                MethodBase<MethodReference, HeldType, Functor, ReturnPolicy, Args...>
-            > { return {functor}; }
-
-            /**
-             * Function object/pointer taking at least 1 argument
-             */
-            struct MethodOther
-            {
-                template<class HeldType, class Functor, class... Args, std::size_t... Indices>
-                    static auto invoke(const Functor& functor,
-                                       HeldType& value,
-                                       const Object::Arguments& args,
-                                       std::index_sequence<Indices...>)
-                    {
-                        return std::invoke(functor, args[Indices].cast<Args>()...);
-                    }
-            };
-            template<class ReturnPolicy, class HeldType, class Functor, class Head, class... Args>
-            auto call_helper(Functor functor, DummyTuple<Head, Args...>)
-            -> std::enable_if_t<
-                !std::is_member_function_pointer<Functor>::value &&
-                !std::is_convertible<HeldType&, Head>::value &&
-                !std::is_convertible<HeldType*, Head>::value,
-                MethodBase<MethodOther, HeldType, Functor, ReturnPolicy, Head, Args...>
-            > { return {functor}; }
-
-            /**
-             * Function object/pointer taking no arguments
-             */
-            template<class ReturnPolicy, class HeldType, class Functor>
-            auto call_helper(Functor functor, DummyTuple<>)
-            -> std::enable_if_t<
-                !std::is_member_function_pointer<Functor>::value,
-                MethodBase<MethodOther, HeldType, Functor, ReturnPolicy>
-            > { return {functor}; }
-
-            /** Member function
-             * \brief Exposes a functor as a method of the class
-             */
-            template<class ReturnPolicy, class HeldType, class Functor>
-            Method<HeldType> wrap_functor(const std::string& name, Functor functor)
-            {
-                using Sig = FunctionSignature<Functor>;
-                return call_helper<ReturnPolicy, HeldType>(
-                    functor,
-                    typename Sig::argument_types_tag()
-                ).method();
-            }
-
             /**
              * Constructor, Functor
              */
@@ -1807,6 +1742,105 @@ namespace wrapper {
 
         } // namespace function
 
+        namespace function2 {
+
+            template<class Functor, class ReturnPolicy, class... Args>
+            class MethodBase
+            {
+            public:
+                Functor functor;
+
+                Object operator()(
+                    const TypeWrapper* type,
+                    const Object::Arguments& args) const
+                {
+                    return call_and_bind(type, args, std::make_index_sequence<sizeof...(Args)>{});
+                }
+
+                Method method() const
+                {
+                    return {DummyTuple<Args...>{}, *this};
+                }
+
+            private:
+                /*
+                 * Invokable
+                 */
+                template<class... Args2, std::size_t... Indices>
+                auto invoke(
+                    const Object::Arguments& args,
+                    std::index_sequence<Indices...> seq,
+                    const MethodBase*
+                ) const
+                    -> decltype(std::__invoke(functor, args[Indices].cast<Args2>()...))
+                {
+                    auto iter = args.begin();
+                    if ( sizeof...(Args2) < args.size() )
+                        ++iter;
+                    return std::__invoke(functor, iter[Indices].cast<Args2>()...);
+                }
+
+                /*
+                 * Not ivokable
+                 */
+                template<class... Args2, std::size_t... Indices>
+                decltype(auto) invoke(
+                    const Object::Arguments& args,
+                    std::index_sequence<Indices...>,
+                    const void*
+                ) const
+                {
+                    return functor;
+                }
+
+                template<std::size_t... Indices>
+                auto call_and_bind(
+                    const TypeWrapper* type,
+                    const Object::Arguments& args,
+                    std::index_sequence<Indices...> indices) const
+                -> std::enable_if_t<
+                    !std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
+                    Object>
+                {
+                    return type->type_system().bind(
+                        invoke<Args...>(args, indices, this),
+                        ReturnPolicy{}
+                    );
+                }
+
+                template<std::size_t... Indices>
+                auto call_and_bind(
+                    const TypeWrapper* type,
+                    const Object::Arguments& args,
+                    std::index_sequence<Indices...> indices) const
+                -> std::enable_if_t<
+                    std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
+                    Object>
+                {
+                    invoke<Args...>(args, indices, this);
+                    return Object({});
+                }
+            };
+
+            template<class ReturnPolicy, class Functor, class... Args>
+            MethodBase<Functor, ReturnPolicy, Args...>
+                resolve_method_arguments(Functor functor, DummyTuple<Args...>)
+            { return {functor}; }
+
+            /*
+             * Exposes a functor as a method of the class
+             */
+            template<class ReturnPolicy, class Functor>
+            Method wrap_functor(const std::string& name, Functor functor)
+            {
+                using Sig = FunctionSignature<Functor>;
+                return resolve_method_arguments<ReturnPolicy>(
+                    functor,
+                    typename Sig::invoke_types_tag()
+                ).method();
+            }
+
+        } // namespace function
     } // namespace detail
 
     template<class Class>
@@ -1835,7 +1869,7 @@ namespace wrapper {
         {
             methods.insert({
                 name,
-                detail::function::wrap_functor<ReturnPolicy, HeldType>(name, value)
+                detail::function2::wrap_functor<ReturnPolicy>(name, value)
             });
             return *this;
         }
@@ -1919,36 +1953,47 @@ namespace wrapper {
             TypeWrapper::inherit(type_system().wrapper_for(type_name));
         }
 
+
+    namespace detail {
+        template<class Type>
+        struct CastTemplate
+        {
+            template<class T>
+            static decltype(auto) cast_helper(const Object&, ValueWrapper* value)
+            {
+                if ( auto ptr = dynamic_cast<wrapper::ObjectWrapper<Type>*>(value) )
+                    return get_reference<T>(ptr->get());
+
+                throw TypeError(
+                    "Object is of type " + value->type().name() + ", not "
+                    + value->type().type_system().type_name<Type>()
+                );
+            }
+        };
+
+        template<>
+        struct CastTemplate<Object>
+        {
+            template<class T>
+            static decltype(auto) cast_helper(const Object& object, ValueWrapper*)
+            {
+                    return get_reference<T>(object);
+            }
+        };
+
+        template<class T>
+        decltype(get_reference<T>(std::declval<CastBase<T>&>()))
+        cast_helper(const Object& object, ValueWrapper* value)
+        {
+            return CastTemplate<CastBase<T>>::template cast_helper<T>(object, value);
+        }
+    } // namespace detail
 } // namespace wrapper
-
-template<class T>
-const T& Object::cast() const
-{
-    using Type = std::decay_t<T>;
-    if ( auto ptr = dynamic_cast<wrapper::ObjectWrapper<Type>*>(value.get()) )
-        return ptr->get();
-    throw TypeError(
-        "Object is of type " + value->type().name() + ", not "
-        + value->type().type_system().type_name<Type>()
-    );
-}
-
-template<>
-inline const Object& Object::cast<const Object&>() const
-{
-    return *this;
-}
-
-template<>
-inline const Object& Object::cast<Object>() const
-{
-    return *this;
-}
 
 template<class T>
 bool Object::has_type() const
 {
-    using Type = std::decay_t<T>;
+    using Type = std::decay_t<std::remove_pointer_t<std::decay_t<T>>>;
     return dynamic_cast<wrapper::ObjectWrapper<Type>*>(value.get());
 }
 

@@ -246,7 +246,6 @@ BOOST_AUTO_TEST_CASE( test_method_access_method )
     BOOST_CHECK_EQUAL( object.call("method_arg", {arg}).to_string(), "-foodata");
 
 }
-
 std::string function_const(const SomeClass& obj, const std::string& arg)
 {
     return obj.data_member + arg;
@@ -357,6 +356,33 @@ BOOST_AUTO_TEST_CASE( test_method_overload )
     BOOST_CHECK_EQUAL( object.call("method", {arg, arg}).to_string(), "foofoo");
     BOOST_CHECK_THROW( object.call("method", {arg, arg, arg}).to_string(), MemberNotFound);
     BOOST_CHECK_THROW( object.call("method", {ns.object(1)}).to_string(), MemberNotFound);
+}
+
+BOOST_AUTO_TEST_CASE( test_method_void )
+{
+    TypeSystem ns;
+    ns.register_type<SomeClass>()
+        .add_method("method", [](){})
+    ;
+
+    Object object = ns.object(SomeClass());
+    BOOST_CHECK( !object.call("method", {}).has_value() );
+}
+
+
+BOOST_AUTO_TEST_CASE( test_method_constant )
+{
+    std::string foo = "bar";
+    TypeSystem ns;
+    ns.register_type<SomeClassWithMethods>()
+        .add_method("method", foo)
+    ;
+    ns.register_type<std::string>();
+
+    Object object = ns.object(SomeClassWithMethods());
+    Object arg = ns.object<std::string>("foo");
+    BOOST_CHECK_EQUAL( object.call("method", {}).to_string(), foo);
+    BOOST_CHECK_THROW( object.call("method", {arg}).to_string(), MemberNotFound);
 }
 
 struct SettableClass

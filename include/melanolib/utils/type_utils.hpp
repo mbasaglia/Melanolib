@@ -58,6 +58,7 @@ template<class Ret, class...Args>
         using return_type = Ret;
         using arguments_types = std::tuple<Args...>;
         using argument_types_tag = DummyTuple<Args...>;
+        using invoke_types_tag = DummyTuple<Args...>;
         static constexpr auto argument_count = sizeof...(Args);
     };
 
@@ -85,6 +86,7 @@ template<class Class, class Ret, class...Args>
         using return_type = Ret;
         using arguments_types = std::tuple<Args...>;
         using argument_types_tag = DummyTuple<Args...>;
+        using invoke_types_tag = DummyTuple<const Class*, Args...>;
         static constexpr auto argument_count = sizeof...(Args);
         static constexpr bool is_const = true;
     };
@@ -96,14 +98,34 @@ template<class Class, class Ret, class...Args>
         using return_type = Ret;
         using arguments_types = std::tuple<Args...>;
         using argument_types_tag = DummyTuple<Args...>;
+        using invoke_types_tag = DummyTuple<Class*, Args...>;
         static constexpr auto argument_count = sizeof...(Args);
         static constexpr bool is_const = false;
     };
 
+namespace detail {
+
+    template<class Class>
+        MemberFunctionSignature<decltype(&Class::operator())>
+        object_to_function(Class*);
+
+    struct ValueSignature
+    {
+        using argument_types_tag = DummyTuple<>;
+    };
+
+    ValueSignature object_to_function(void*);
+
+    template<class Class>
+        using ObjectToFunction = decltype(object_to_function(std::declval<Class*>()));
+
+} // namespace detail
+
 template<class Class>
     struct FunctionSignature
-        : public MemberFunctionSignature<decltype(&Class::operator())>
+        : public detail::ObjectToFunction<Class>
     {
+        using invoke_types_tag = typename FunctionSignature::argument_types_tag;
     };
 
 template<class Class, class Ret, class...Args>
