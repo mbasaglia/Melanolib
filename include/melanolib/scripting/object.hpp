@@ -498,11 +498,11 @@ namespace wrapper {
         template<class HeldType>
             using UnregGetter = std::function<Object(const ClassWrapper<HeldType>*, const HeldType&, const std::string& name)>;
 
-        template<class Return, int can_skip, class... FixedArgs>
+        template<class Return, int can_skip>
         class Overloadable
         {
         public:
-            using Functor = std::function<Return(FixedArgs..., const Object::Arguments&)>;
+            using Functor = std::function<Return(const TypeWrapper*, const Object::Arguments&)>;
             using TypeList = std::vector<std::type_index>;
 
             template<class FunctorT, class... Args>
@@ -535,18 +535,18 @@ namespace wrapper {
             /**
              * \pre can_call(args)
              */
-            Return operator()(FixedArgs... pre_args, const Object::Arguments& args) const
+            Return operator()(const TypeWrapper* type, const Object::Arguments& args) const
             {
-                if ( args.size() != types.size() && args.size() != types.size() + 1 )
+                if ( args.size() != types.size() && args.size() != types.size() + can_skip )
                     throw TypeError("Wrong number of arguments");
-                return functor(pre_args..., args);
+                return functor(type, args);
             }
         private:
             Functor functor;
             TypeList types;
         };
 
-        using Method = Overloadable<Object, 1, const TypeWrapper*>;
+        using Method = Overloadable<Object, 1>;
         using MethodMap = std::unordered_multimap<std::string, Method>;
 
         template<class HeldType>
@@ -558,7 +558,7 @@ namespace wrapper {
         template<class HeldType>
             using UnregSetter = std::function<void(HeldType&, const std::string& name, const Object&)>;
 
-        using Constructor = Overloadable<Object, 0, const TypeWrapper*>;
+        using Constructor = Overloadable<Object, 0>;
         using ConstructorList = std::vector<Constructor>;
 
         template<class HeldType>
