@@ -107,27 +107,31 @@ namespace detail {
 
     template<class Class>
         MemberFunctionSignature<decltype(&Class::operator())>
-        object_to_function(Class*);
+        object_to_function(Class*, Class*);
 
-    template<class Class>
+    template<class Class, class Type>
     struct PointerSignature
     {
+        using return_type = Type;
         using argument_types_tag = DummyTuple<Class*>;
     };
 
     template<class Class, class Type>
-        PointerSignature<Class>
-        object_to_function(Type Class::*);
+        PointerSignature<Class, Type>
+        object_to_function(Type Class::*, Type Class::*);
 
+    template<class Type>
     struct ValueSignature
     {
         using argument_types_tag = DummyTuple<>;
+        using return_type = Type;
     };
 
-    ValueSignature object_to_function(void*);
+    template<class Type>
+    ValueSignature<Type> object_to_function(Type*, void*);
 
     template<class Class>
-        using ObjectToFunction = decltype(object_to_function(std::declval<Class*>()));
+        using ObjectToFunction = decltype(object_to_function(std::declval<Class*>(), std::declval<Class*>()));
 
 } // namespace detail
 

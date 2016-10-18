@@ -74,7 +74,7 @@ namespace wrapper {
          * \brief Returns a child object (or throws MemberNotFound)
          * \throws MemberNotFound
          */
-        virtual Object get_child(const std::string& name) const = 0;
+        virtual Object get_child(const Object& owner, const std::string& name) const = 0;
 
         /**
          * \brief Sets a value on a child object
@@ -92,7 +92,7 @@ namespace wrapper {
         /**
          * \brief Converts to an object of a different type
          */
-        virtual Object converted(const std::type_info& type) const = 0;
+        virtual Object converted(const Object& owner, const std::type_info& type) const = 0;
 
         virtual void iterate(const IteratorCallback& callback) = 0;
 
@@ -215,7 +215,7 @@ public:
      */
     Object get(const std::string& name) const
     {
-        return value->get_child(name);
+        return value->get_child(*this, name);
     }
 
     /**
@@ -317,7 +317,7 @@ private:
         {
             if ( begin >= end )
                 return *this;
-            return value->get_child(*begin).get(begin+1, end);
+            return value->get_child(*this, *begin).get(begin+1, end);
         }
 
     std::shared_ptr<wrapper::ValueWrapper> value;
@@ -497,9 +497,6 @@ namespace wrapper {
         template<class HeldType>
             using GetterMap = std::unordered_map<std::string, Getter<HeldType>>;
 
-        template<class HeldType>
-            using UnregGetter = std::function<Object(const ClassWrapper<HeldType>*, const HeldType&, const std::string& name)>;
-
         using FunctorBase = std::function<Object(const TypeWrapper*, const Object::Arguments&)>;
 
         template<int can_skip>
@@ -585,8 +582,11 @@ namespace wrapper {
         using Constructor = Overloadable<0>;
         using ConstructorList = std::vector<Constructor>;
 
-        template<class HeldType>
-            using ConverterMap = std::unordered_map<std::type_index, Getter<HeldType>>;
+
+        using NewGetter = LimitArgs<0, 1>;
+        using UnregGetter = LimitArgs<1, 2>;
+
+        using ConverterMap = std::unordered_map<std::type_index, NewGetter>;
 
         template<class HeldType>
             using Iterator = std::function<void(
@@ -866,16 +866,16 @@ namespace wrapper {
          * \throws MemberNotFound if \p name is not something registered
          * with add_readonly or add_readwrite
          */
-        Object get_value(const HeldType& owner, const std::string& attrname) const
+        Object get_value(const Object& owner, const std::string& attrname) const
         {
             auto iter = getters.find(attrname);
             if ( iter == getters.end() )
             {
                 if ( _fallback_getter )
-                    return _fallback_getter(this, owner, attrname);
+                    return _fallback_getter(this, {owner, make_foreign_object(attrname)});
                 throw MemberNotFound("\"" + attrname + "\" is not a member of " + name());
             }
-            return iter->second(this, owner);
+            return iter->second(this, owner.cast<HeldType>());
         }
 
         /**
@@ -928,7 +928,7 @@ namespace wrapper {
          * \throws MemberNotFound if \p name is not something registered
          * with conversion()
          */
-        Object convert(const HeldType& owner, const std::type_info& type) const
+        Object convert(const Object& owner, const std::type_info& type) const
         {
             auto iter = converters.find(type);
             if ( iter == converters.end() )
@@ -936,7 +936,7 @@ namespace wrapper {
                 throw MemberNotFound("Cannot convert " + name() + " to " +
                     type_system().type_name(type));
             }
-            return iter->second(this, owner);
+            return iter->second(this, {owner});
         }
 
         std::unique_ptr<TypeWrapper> clone() const override
@@ -963,12 +963,12 @@ namespace wrapper {
         Object make_foreign_object(const T& obj) const;
 
         detail::GetterMap<HeldType> getters;
-        detail::UnregGetter<HeldType> _fallback_getter;
+        detail::UnregGetter _fallback_getter;
         detail::MethodMap methods;
         detail::SetterMap setters;
         detail::UnregSetter _fallback_setter;
         detail::ConstructorList _constructors;
-        detail::ConverterMap<HeldType> converters;
+        detail::ConverterMap converters;
         detail::Iterator<HeldType> iterator;
         detail::Stringizer<HeldType> stringizer;
     };
@@ -997,16 +997,15 @@ namespace wrapper {
             return class_wrapper().to_string(value.get());
         }
 
-        Object get_child(const std::string& name) const override
+        Object get_child(const Object& owner, const std::string& name) const override
         {
-            return class_wrapper().get_value(value.get(), name);
+            return class_wrapper().get_value(owner, name);
         }
 
         Object set_child(const std::string& name, const Object::Arguments& args) override
         {
             return class_wrapper().set_value(name, args);
         }
-
 
         const ClassWrapper<Class>& class_wrapper() const
         {
@@ -1028,9 +1027,9 @@ namespace wrapper {
             return class_wrapper().call_method(name, args);
         }
 
-        Object converted(const std::type_info& type) const override
+        Object converted(const Object& owner, const std::type_info& type) const override
         {
-            return class_wrapper().convert(value.get(), type);
+            return class_wrapper().convert(owner, type);
         }
 
         void iterate(const IteratorCallback& callback) override
@@ -1503,77 +1502,14 @@ namespace wrapper {
                     return {const_cast<T&>(value)};
                 }
 
-
-            /**
-             * \brief Exposes a member function as a fallback getter
-             */
-            template<class ReturnPolicy, class HeldType, class Functor>
-                std::enable_if_t<
-                    std::is_member_pointer<Functor>::value ||
-                    IsCallableAnyReturn<Functor, const HeldType*, const std::string&>::value,
-                    UnregGetter<HeldType>
-                >
-                unreg_getter(const Functor& functor)
-                {
-                    return [functor](const ClassWrapper<HeldType>* type,
-                                     const HeldType& value,
-                                     const std::string& name) {
-                        return type->type_system().bind(
-                            std::invoke(functor, &value, name),
-                            ReturnPolicy{}
-                        );
-                    };
-                }
-
-            /**
-             * \brief Exposes an arbitraty functon (taking a const reference to the
-             * class and a name as a string) as a fallback getter
-             */
-            template<class ReturnPolicy, class HeldType, class Functor>
-                std::enable_if_t<
-                    IsCallableAnyReturn<Functor, const HeldType&, const std::string&>::value,
-                    UnregGetter<HeldType>
-                >
-                unreg_getter(const Functor& functor)
-                {
-                    return [functor](
-                        const ClassWrapper<HeldType>* type,
-                        const HeldType& value,
-                        const std::string& name) {
-                        return type->type_system().bind(
-                            functor(value, name),
-                            ReturnPolicy{}
-                        );
-                    };
-                }
-
-            /**
-             * \brief Exposes an arbitraty functon (taking a name as a string)
-             * as a fallback getter
-             */
-            template<class ReturnPolicy, class HeldType, class Functor>
-                std::enable_if_t<
-                    IsCallableAnyReturn<Functor, const std::string&>::value,
-                    UnregGetter<HeldType>
-                >
-                unreg_getter(const Functor& functor)
-                {
-                    return [functor](
-                        const ClassWrapper<HeldType>* type,
-                        const HeldType&,
-                        const std::string& name) {
-                        return type->type_system().bind(
-                            functor(name),
-                            ReturnPolicy{}
-                        );
-                    };
-                }
         } // namespace getter
 
-        template<class Functor, class ReturnPolicy, class... Args>
+        template<class Functor, class ReturnPolicy, class Ret, class... Args>
         class FunctorWrapper
         {
         public:
+            using return_type = Ret;
+
             Functor functor;
 
             Object operator()(
@@ -1655,8 +1591,8 @@ namespace wrapper {
             }
         };
 
-        template<class ReturnPolicy, class Functor, class... Args>
-        FunctorWrapper<Functor, ReturnPolicy, Args...>
+        template<class ReturnPolicy, class Ret, class Functor, class... Args>
+        FunctorWrapper<Functor, ReturnPolicy, Ret, Args...>
             resolve_method_arguments(Functor functor, DummyTuple<Args...>)
         { return {functor}; }
 
@@ -1666,7 +1602,7 @@ namespace wrapper {
             using Sig = FunctionSignature<Functor>;
             return {
                 typename Sig::invoke_types_tag(),
-                resolve_method_arguments<ReturnPolicy>(
+                resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
                     functor,
                     typename Sig::invoke_types_tag()
                 )
@@ -1679,7 +1615,7 @@ namespace wrapper {
             using Sig = FunctionSignature<Functor>;
             return {
                 typename Sig::invoke_types_tag(),
-                resolve_method_arguments<ReturnPolicy>(
+                resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
                     functor,
                     typename Sig::invoke_types_tag()
                 )
@@ -1752,7 +1688,7 @@ namespace wrapper {
         {
             using Setter = typename MakeSetter<Functor>::type;
             using Sig = FunctionSignature<Setter>;
-            return resolve_method_arguments<ReturnPolicy>(
+            return resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
                 Setter(functor),
                 typename Sig::invoke_types_tag()
             );
@@ -1762,7 +1698,7 @@ namespace wrapper {
         auto wrap_functor(Functor functor)
         {
             using Sig = FunctionSignature<Functor>;
-            return resolve_method_arguments<ReturnPolicy>(
+            return resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
                 functor,
                 typename Sig::invoke_types_tag()
             );
@@ -1785,7 +1721,7 @@ namespace wrapper {
         ClassWrapper<Class>& ClassWrapper<Class>::fallback_getter(
             const T& functor, ReturnPolicy)
         {
-            _fallback_getter = detail::getter::unreg_getter<ReturnPolicy, HeldType>(functor);
+            _fallback_getter = detail::wrap_functor<ReturnPolicy>(functor);
             return *this;
         }
 
@@ -1862,7 +1798,7 @@ namespace wrapper {
         ClassWrapper<Class>& ClassWrapper<Class>::conversion(
             const Functor& functor, ReturnPolicy)
         {
-            converters[typeid(Target)] = detail::getter::wrap_getter<ReturnPolicy, HeldType>(functor);
+            converters[typeid(Target)] = detail::wrap_functor<ReturnPolicy>(functor);
             return *this;
         }
 
@@ -1870,9 +1806,9 @@ namespace wrapper {
     template<class Functor, class ReturnPolicy>
         ClassWrapper<Class>& ClassWrapper<Class>::conversion(const Functor& functor, ReturnPolicy)
         {
-            auto getter = detail::getter::wrap_getter<ReturnPolicy, HeldType>(functor);
+            auto getter = detail::wrap_functor<ReturnPolicy>(functor);
             using GetterType = decltype(getter);
-            using Target = std::decay_t<typename GetterType::ReturnType>;
+            using Target = std::decay_t<typename GetterType::return_type>;
             converters[typeid(Target)] = std::move(getter);
             return *this;
         }
@@ -1953,7 +1889,7 @@ Object Object::converted() const
     using Type = std::decay_t<T>;
     if ( has_type<T>() )
         return *this;
-    return value->converted(typeid(Type));
+    return value->converted(*this, typeid(Type));
 }
 
 template<>
