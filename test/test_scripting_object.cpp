@@ -710,8 +710,9 @@ BOOST_AUTO_TEST_CASE( test_reference_fixed_value_return_policy )
     TypeSystem ns;
     ns.register_type<SomeClass>("SomeClass")
         .add_readwrite("data", &SomeClass::data_member)
-        .add_readonly("child", child, WrapReferencePolicy{})
+        .add_readonly("child", wrap_reference(child), WrapReferencePolicy{})
         .add_readonly("child_copy", child, CopyPolicy{})
+        .add_readonly("child_on_read", wrap_reference(child), CopyPolicy{})
     ;
     ns.register_type<std::string>("string");
 
@@ -728,12 +729,18 @@ BOOST_AUTO_TEST_CASE( test_reference_fixed_value_return_policy )
     BOOST_CHECK_EQUAL( reference.get("data").to_string(), "bar" );
     BOOST_CHECK_EQUAL( object.get("data").to_string(), "data member" );
 
-    /// \todo a system where the fixed value is stored as reference but copied on access
     Object copy = object.get("child_copy");
     BOOST_CHECK_EQUAL( copy.get("data").to_string(), "data member" );
     copy.set("data", ns.object<std::string>("foo"));
     BOOST_CHECK_EQUAL( copy.get("data").to_string(), "foo" );
     BOOST_CHECK_EQUAL( child.data_member, "bar" );
+
+    child.data_member = "hello world";
+    Object cor = object.get("child_on_read");
+    BOOST_CHECK_EQUAL( cor.get("data").to_string(), "hello world" );
+    cor.set("data", ns.object<std::string>("foo"));
+    BOOST_CHECK_EQUAL( cor.get("data").to_string(), "foo" );
+    BOOST_CHECK_EQUAL( child.data_member, "hello world" );
 }
 
 BOOST_AUTO_TEST_CASE( test_object_forwarding )

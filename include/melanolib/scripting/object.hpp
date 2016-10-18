@@ -491,12 +491,6 @@ namespace wrapper {
 
     template<class Class> class ClassWrapper;
     namespace detail {
-        template<class HeldType>
-            using Getter = std::function<Object(const ClassWrapper<HeldType>*, const HeldType&)>;
-
-        template<class HeldType>
-            using GetterMap = std::unordered_map<std::string, Getter<HeldType>>;
-
         using FunctorBase = std::function<Object(const TypeWrapper*, const Object::Arguments&)>;
 
         template<int can_skip>
@@ -583,10 +577,11 @@ namespace wrapper {
         using ConstructorList = std::vector<Constructor>;
 
 
-        using NewGetter = LimitArgs<0, 1>;
+        using Getter = LimitArgs<0, 1>;
+        using GetterMap = std::unordered_map<std::string, Getter>;
         using UnregGetter = LimitArgs<1, 2>;
 
-        using ConverterMap = std::unordered_map<std::type_index, NewGetter>;
+        using ConverterMap = std::unordered_map<std::type_index, Getter>;
 
         template<class HeldType>
             using Iterator = std::function<void(
@@ -658,13 +653,12 @@ namespace wrapper {
         /**
          * \brief Exposes an attribute
          * \tparam T can be:
-         * * A pointer to a data member of HeldType
-         * * A pointer to a member function of HeldType taking no arguments
-         * * Any function object taking no arguments
-         * * Any function object taking a const HeldType& or a const HeldType* argument
+         * * Any callable that can be invoked with an optional pointer or reference to HeldType
          * * Any other object of a type registered to the parent namespace
          * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
          *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object, you'll need
+         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
          */
         template<class T, class ReturnPolicy = CopyPolicy>
             ClassWrapper& add_readonly(const std::string& name, const T& value, ReturnPolicy = {});
@@ -674,10 +668,8 @@ namespace wrapper {
          * \brief Sets a fallback functions used to get additional unregistered
          *        attributes
          * \tparam T can be:
-         * * A pointer to a function member of HeldType taking a const std::string&
-         * * Any function object taking a const HeldType& and a const std::string&
-         * * Any function object taking a const HeldType* and a const std::string&
-         * * Any function object taking a const std::string&
+         * * Any callable that can be invoked with an optional pointer or
+         *   reference to HeldType and a string
          * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
          *                      how to bind the returned value
          */
@@ -687,19 +679,15 @@ namespace wrapper {
         /**
          * \brief Exposes an attribute
          * \tparam Read can be:
-         * * A pointer to a data member of HeldType
-         * * A pointer to a member function of HeldType taking no arguments
-         * * Any function object taking no arguments
-         * * Any function object taking a const HeldType& or a const HeldType* argument
+         * * Any callable that can be invoked with an optional pointer or reference to HeldType
          * * Any other object of a type registered to the parent namespace
          * \tparam Write can be:
-         * * A pointer to a data member of HeldType
-         * * A pointer to a member function of HeldType taking a single argument
-         * * Any function object taking a reference to HeldType and a single other argument
-         * * Any function object taking a pointer to HeldType and a single other argument
-         * * Any other function object or pointer taking a single argument
+         * * Any callable that can be invoked with an optional pointer or
+         *   reference to HeldType and an argument of any type registered to the typesystem
          * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
          *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object, you'll need
+         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
          */
         template<class Read, class Write, class ReturnPolicy = CopyPolicy>
             ClassWrapper& add_readwrite(
@@ -731,21 +719,22 @@ namespace wrapper {
         /**
          * \brief Sets a fallback function used to set additional unregistered attributes
          * \tparam T can be:
-         * * A pointer to a function member of HeldType taking a const std::string& and another value
-         * * Any function object taking a const HeldType&, a const std::string& and another value
-         * * Any function object taking a const HeldType*, a const std::string& and another value
-         * * Any function object taking a const std::string& and another value
+         * * Any callable that can be invoked with an optional reference or
+         *   pointer to HeldType, a string, and an additional argument
          */
         template<class T>
             ClassWrapper& fallback_setter(const T& functor);
 
         /**
          * \brief Exposes a member function
-         * \tparam T can be any function object or pointer.
-         * If the first argument is convertible from a pointer or reference
-         * to HeldType, the owning object will be passed.
+         * \tparam T can be:
+         * * Any callable, if it takes as first argument a a reference or
+         *   pointer to HeldType, the current object will be passed
+         * * Any other object of a type registered to the parent namespace
          * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
          *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object, you'll need
+         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
          */
         template<class T, class ReturnPolicy = CopyPolicy>
             ClassWrapper& add_method(const std::string& name, const T& value,
@@ -753,9 +742,13 @@ namespace wrapper {
 
         /**
          * \brief Sets the function used as a constructor
-         * \tparam T can be any callable object
+         * \tparam T can be:
+         * * Any callable object returning an object, pointer or reference of HeldType
+         * * An object of type HeldType
          * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
          *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object, you'll need
+         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
          */
         template<class T, class ReturnPolicy = CopyPolicy>
             ClassWrapper& constructor(const T& functor, ReturnPolicy = {});
@@ -769,26 +762,25 @@ namespace wrapper {
 
         /**
          * \brief Exposes a conversion operator
+         * \tparam Target The type this conversion converts to
          * \tparam Functor can be:
-         * * A pointer to a data member of HeldType
-         * * A pointer to a member function of HeldType taking no arguments
-         * * Any function object taking no arguments
-         * * Any function object taking a const HeldType& or a const HeldType* argument
+         * * Any callable that can be invoked with an optional pointer or
+         *   reference to HeldType that returns a value convertible (in C++)
+         *   to \p Target
          * * Any other object of a type registered to the parent namespace
+         *   convertible (in C++) to \p Target
          * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
          *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object, you'll need
+         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
          */
         template<class Target, class Functor, class ReturnPolicy = CopyPolicy>
             ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {});
 
         /**
          * \brief Exposes a conversion operator
-         * \tparam Functor can be:
-         * * A pointer to a data member of HeldType
-         * * A pointer to a member function of HeldType taking no arguments
-         * * Any function object taking no arguments
-         * * Any function object taking a const HeldType& or a const HeldType* argument
-         * * Any other object of a type registered to the parent namespace
+         *
+         * The target type is deduced from the result of a call to \p Functor
          */
         template<class Functor, class ReturnPolicy = CopyPolicy>
             ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {});
@@ -875,7 +867,7 @@ namespace wrapper {
                     return _fallback_getter(this, {owner, make_foreign_object(attrname)});
                 throw MemberNotFound("\"" + attrname + "\" is not a member of " + name());
             }
-            return iter->second(this, owner.cast<HeldType>());
+            return iter->second(this, {owner});
         }
 
         /**
@@ -962,7 +954,7 @@ namespace wrapper {
         template<class T>
         Object make_foreign_object(const T& obj) const;
 
-        detail::GetterMap<HeldType> getters;
+        detail::GetterMap getters;
         detail::UnregGetter _fallback_getter;
         detail::MethodMap methods;
         detail::SetterMap setters;
@@ -1112,6 +1104,16 @@ public:
     Object bind(const Class& value, CopyPolicy) const
     {
         return object(value);
+    }
+
+    /**
+     * \brief Creates an object wrapper around the value
+     * \throws TypeError if \p Class has not been registered with register_type
+     */
+    template<class Class>
+    Object bind(const Ref<Class>& value, CopyPolicy) const
+    {
+        return object(value.get());
     }
 
     /**
@@ -1371,139 +1373,6 @@ namespace wrapper {
 
     namespace detail {
 
-        namespace getter {
-
-            template<class GetterType, class HeldType, class Functor, class ReturnPolicy>
-                struct GetterBase
-            {
-                Object operator()(const ClassWrapper<HeldType>* type, const HeldType& value) const
-                {
-                    return type->type_system().bind(
-                        GetterType::invoke(functor, value),
-                        ReturnPolicy{}
-                    );
-                }
-
-                using ReturnType = decltype(GetterType::invoke(
-                    std::declval<Functor>(),
-                    std::declval<const HeldType&>()));
-
-                Functor functor;
-            };
-
-            struct GetterPointer
-            {
-                template<class HeldType, class Functor>
-                    static decltype(auto) invoke(const Functor& functor, const HeldType& value)
-                    {
-                        return std::invoke(functor, &value);
-                    }
-            };
-
-            /**
-             * Member pointer or function taking a const HeldType*
-             */
-            template<class ReturnPolicy, class HeldType, class Functor>
-                std::enable_if_t<
-                    std::is_member_pointer<Functor>::value ||
-                    IsCallableAnyReturn<Functor, const HeldType*>::value,
-                    GetterBase<GetterPointer, HeldType, Functor, ReturnPolicy>
-                >
-                wrap_getter(const Functor& functor)
-                {
-                    return {functor};
-                }
-
-            struct GetterReference
-            {
-                template<class HeldType, class Functor>
-                    static decltype(auto) invoke(const Functor& functor, const HeldType& value)
-                    {
-                        return std::invoke(functor, value);
-                    }
-            };
-
-            /**
-             * Functon taking a const reference to the class
-             */
-            template<class ReturnPolicy, class HeldType, class Functor>
-                std::enable_if_t<
-                    IsCallableAnyReturn<Functor, const HeldType&>::value,
-                    GetterBase<GetterReference, HeldType, Functor, ReturnPolicy>
-                >
-                wrap_getter(const Functor& functor)
-                {
-                    return {functor};
-                }
-
-            struct GetterNoarg
-            {
-                template<class HeldType, class Functor>
-                    static decltype(auto) invoke(const Functor& functor, const HeldType& value)
-                    {
-                        return std::invoke(functor);
-                    }
-            };
-
-            /**
-             * Arbitraty functon taking no arguments
-             */
-            template<class ReturnPolicy, class HeldType, class Functor>
-                std::enable_if_t<
-                    IsCallableAnyReturn<Functor>::value,
-                    GetterBase<GetterNoarg, HeldType, Functor, ReturnPolicy>
-                >
-                wrap_getter(const Functor& functor)
-                {
-                    return {functor};
-                }
-
-            template<class Policy> struct GetterFixed{};
-
-            template<>
-            struct GetterFixed<CopyPolicy>
-            {
-                template<class HeldType, class Functor>
-                    static Functor invoke(const Functor& functor, const HeldType& value)
-                    {
-                        return functor;
-                    }
-
-                template<class HeldType, class Value>
-                using Base = GetterBase<GetterFixed, HeldType, Value, CopyPolicy>;
-            };
-
-            template<>
-            struct GetterFixed<WrapReferencePolicy>
-            {
-                template<class HeldType, class Functor>
-                    static Functor& invoke(Functor& functor, const HeldType& value)
-                    {
-                        return functor;
-                    }
-
-                template<class HeldType, class Value>
-                using Base = GetterBase<GetterFixed, HeldType, Value&, WrapReferencePolicy>;
-            };
-
-            /**
-             * Fixed value
-             */
-            template<class ReturnPolicy, class HeldType, class T>
-                std::enable_if_t<
-                    !IsCallableAnyReturn<T, const HeldType&>::value &&
-                    !IsCallableAnyReturn<T>::value &&
-                    !IsCallableAnyReturn<T, const HeldType*>::value &&
-                    !std::is_member_pointer<T>::value,
-                    typename GetterFixed<ReturnPolicy>::template Base<HeldType, T>
-                >
-                wrap_getter(const T& value)
-                {
-                    return {const_cast<T&>(value)};
-                }
-
-        } // namespace getter
-
         template<class Functor, class ReturnPolicy, class Ret, class... Args>
         class FunctorWrapper
         {
@@ -1623,8 +1492,8 @@ namespace wrapper {
         }
 
         /**
-            * Constructor
-            */
+         * Constructor
+         */
         template<class Class, class... Args, std::size_t... Indices>
         Class raw_ctor_helper(
             const Object::Arguments& args,
@@ -1681,8 +1550,6 @@ namespace wrapper {
             Type Class::* pointer;
         };
 
-
-
         template<class ReturnPolicy, class Functor>
         Setter wrap_setter(Functor functor)
         {
@@ -1711,7 +1578,7 @@ namespace wrapper {
         ClassWrapper<Class>& ClassWrapper<Class>::add_readonly(
             const std::string& name, const T& value, ReturnPolicy)
         {
-            getters[name] = detail::getter::wrap_getter<ReturnPolicy, HeldType>(value);
+            getters[name] = detail::wrap_functor<ReturnPolicy>(value);
             return *this;
         }
 
@@ -1742,7 +1609,7 @@ namespace wrapper {
         ClassWrapper<Class>& ClassWrapper<Class>::add_readwrite(
             const std::string& name, const Read& read, const Write& write, ReturnPolicy)
         {
-            getters[name] = detail::getter::wrap_getter<ReturnPolicy, HeldType>(read);
+            getters[name] = detail::wrap_functor<ReturnPolicy>(read);
             setters.insert({
                 name,
                 detail::wrap_setter<ReturnPolicy>(write)
@@ -1754,7 +1621,7 @@ namespace wrapper {
     template<class T>
         ClassWrapper<Class>& ClassWrapper<Class>::fallback_setter(const T& functor)
         {
-            _fallback_setter = detail::wrap_functor<HeldType>(functor);
+            _fallback_setter = detail::wrap_functor<CopyPolicy>(functor);
             return *this;
         }
 

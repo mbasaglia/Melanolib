@@ -118,7 +118,7 @@ namespace detail {
 
     template<class Class, class Type>
         PointerSignature<Class, Type>
-        object_to_function(Type Class::*, Type Class::*);
+        object_to_function(Type Class::**, Type Class::**);
 
     template<class Type>
     struct ValueSignature
