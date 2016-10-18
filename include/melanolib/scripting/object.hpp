@@ -43,6 +43,7 @@ class Object;
 namespace wrapper {
     class TypeWrapper;
     using IteratorCallback = std::function<void (const Object&)>;
+    using Arguments = std::vector<Object>;
 
     /**
      * \brief Base class to erase the type of an object
@@ -78,14 +79,15 @@ namespace wrapper {
         /**
          * \brief Sets a value on a child object
          * \throws MemberNotFound or TypeError
+         * \pre args.size() == 2
          */
-        virtual void set_child(const std::string& name, const Object& value) = 0;
+        virtual Object set_child(const std::string& name, const Arguments& args) = 0;
 
         /**
          * \brief Calls a child function
          * \throws MemberNotFound
          */
-        virtual Object call_method(const std::string& name, const std::vector<Object>& args) = 0;
+        virtual Object call_method(const std::string& name, const Arguments& args) = 0;
 
         /**
          * \brief Converts to an object of a different type
@@ -175,7 +177,7 @@ class Object
 {
 public:
     using MemberPath = std::vector<std::string>;
-    using Arguments = std::vector<Object>;
+    using Arguments = wrapper::Arguments;
 
     explicit Object(std::shared_ptr<wrapper::ValueWrapper> value)
         : value(std::move(value))
@@ -220,9 +222,9 @@ public:
      * \brief Sets a direct attribute
      * \throw MemberNotFound or TypeError
      */
-    void set(const std::string& name, const Object& new_value) const
+    Object set(const std::string& name, const Object& new_value) const
     {
-        value->set_child(name, new_value);
+        return value->set_child(name, {*this, new_value});
     }
 
     /**
@@ -498,11 +500,12 @@ namespace wrapper {
         template<class HeldType>
             using UnregGetter = std::function<Object(const ClassWrapper<HeldType>*, const HeldType&, const std::string& name)>;
 
-        template<class Return, int can_skip>
+        using FunctorBase = std::function<Object(const TypeWrapper*, const Object::Arguments&)>;
+
+        template<int can_skip>
         class Overloadable
         {
         public:
-            using Functor = std::function<Return(const TypeWrapper*, const Object::Arguments&)>;
             using TypeList = std::vector<std::type_index>;
 
             template<class FunctorT, class... Args>
@@ -535,30 +538,51 @@ namespace wrapper {
             /**
              * \pre can_call(args)
              */
-            Return operator()(const TypeWrapper* type, const Object::Arguments& args) const
+            Object operator()(const TypeWrapper* type, const Object::Arguments& args) const
             {
                 if ( args.size() != types.size() && args.size() != types.size() + can_skip )
                     throw TypeError("Wrong number of arguments");
                 return functor(type, args);
             }
         private:
-            Functor functor;
+            FunctorBase functor;
             TypeList types;
         };
 
-        using Method = Overloadable<Object, 1>;
+        template<int minargs, int maxargs = minargs>
+        class LimitArgs
+        {
+        public:
+            template<class... Args>
+            LimitArgs(Args&&... functor)
+                : functor(std::forward<Args>(functor)...)
+            {}
+
+            Object operator()(const TypeWrapper* type, const Object::Arguments& args) const
+            {
+                if ( args.size() < minargs || args.size() > maxargs )
+                    throw TypeError("Wrong number of arguments");
+
+                return functor(type, args);
+            }
+
+            explicit operator bool() const
+            {
+                return bool(functor);
+            }
+
+        private:
+            FunctorBase functor;
+        };
+
+        using Method = Overloadable<1>;
         using MethodMap = std::unordered_multimap<std::string, Method>;
 
-        template<class HeldType>
-            using Setter = std::function<void(HeldType&, const Object&)>;
+        using Setter = LimitArgs<1, 2>;
+        using SetterMap = std::unordered_map<std::string, Setter>;
+        using UnregSetter = LimitArgs<2, 3>;
 
-        template<class HeldType>
-            using SetterMap = std::unordered_map<std::string, Setter<HeldType>>;
-
-        template<class HeldType>
-            using UnregSetter = std::function<void(HeldType&, const std::string& name, const Object&)>;
-
-        using Constructor = Overloadable<Object, 0>;
+        using Constructor = Overloadable<0>;
         using ConstructorList = std::vector<Constructor>;
 
         template<class HeldType>
@@ -858,21 +882,21 @@ namespace wrapper {
          * \brief Sets the value of an attribute
          * \throws MemberNotFound if \p name is not something registered
          * with add_readwrite
-         * \throws TypeError if \p value can't be properly converted
+         * \throws TypeError if \p args can't be properly converted
+         * \pre args.size() == 2
          */
-        void set_value(HeldType& owner, const std::string& attrname, const Object& value) const
+        Object set_value(const std::string& attrname, const Object::Arguments& args) const
         {
             auto iter = setters.find(attrname);
             if ( iter == setters.end() )
             {
                 if ( _fallback_setter )
                 {
-                    _fallback_setter(owner, attrname, value);
-                    return;
+                    return _fallback_setter(this, {args[0], make_foreign_object(attrname), args[1]});
                 }
                 throw MemberNotFound("\"" + attrname + "\" is not a writable member of " + name());
             }
-            iter->second(owner, value);
+            return iter->second(this, args);
         }
 
         /**
@@ -935,11 +959,14 @@ namespace wrapper {
         }
 
     private:
+        template<class T>
+        Object make_foreign_object(const T& obj) const;
+
         detail::GetterMap<HeldType> getters;
         detail::UnregGetter<HeldType> _fallback_getter;
         detail::MethodMap methods;
-        detail::SetterMap<HeldType> setters;
-        detail::UnregSetter<HeldType> _fallback_setter;
+        detail::SetterMap setters;
+        detail::UnregSetter _fallback_setter;
         detail::ConstructorList _constructors;
         detail::ConverterMap<HeldType> converters;
         detail::Iterator<HeldType> iterator;
@@ -975,9 +1002,9 @@ namespace wrapper {
             return class_wrapper().get_value(value.get(), name);
         }
 
-        void set_child(const std::string& name, const Object& new_value) override
+        Object set_child(const std::string& name, const Object::Arguments& args) override
         {
-            return class_wrapper().set_value(value.get(), name, new_value);
+            return class_wrapper().set_value(name, args);
         }
 
 
@@ -996,7 +1023,7 @@ namespace wrapper {
             return value.get();
         }
 
-        Object call_method(const std::string& name, const std::vector<Object>& args) override
+        Object call_method(const std::string& name, const Object::Arguments& args) override
         {
             return class_wrapper().call_method(name, args);
         }
@@ -1543,133 +1570,6 @@ namespace wrapper {
                 }
         } // namespace getter
 
-        namespace setter {
-            /*
-             * Member function or functor taking a pointer as first argument
-             */
-            template<class HeldType, class Functor, class Arg>
-            auto setter_helper(Functor functor, HeldType& object,
-                               const Object& arg, DummyTuple<Arg>)
-            -> std::enable_if_t<
-                std::is_member_function_pointer<Functor>::value ||
-                IsCallableAnyReturn<Functor, HeldType*, Arg>::value
-            >
-            {
-                return std::invoke(functor, object, arg.cast<Arg>());
-            }
-
-            /*
-             * Function object/pointer taking a reference or value as first argument
-             */
-            template<class HeldType, class Functor, class Head, class Arg>
-            auto setter_helper(Functor functor, HeldType& object,
-                             const Object& arg, DummyTuple<Head, Arg>)
-            -> std::enable_if_t<
-                IsCallableAnyReturn<Functor, HeldType&, Arg>::value
-            >
-            {
-                return std::invoke(functor, object, arg.cast<Arg>());
-            }
-
-            /**
-             * Function object/pointer taking at only 1 argument
-             */
-            template<class HeldType, class Functor, class Arg>
-            auto setter_helper(Functor functor, HeldType& object,
-                const Object& arg, DummyTuple<Arg>)
-            -> std::enable_if_t<
-                !std::is_member_function_pointer<Functor>::value
-            >
-            {
-                return std::invoke(functor, arg.cast<Arg>());
-            }
-
-            template<class HeldType, class Functor>
-                auto wrap_setter(const Functor& functor)
-                -> std::enable_if_t<
-                    !std::is_member_object_pointer<Functor>::value,
-                    Setter<HeldType>
-                >
-                {
-                    return [functor](HeldType& value, const Object& arg) {
-                        using Sig = FunctionSignature<Functor>;
-                        setter_helper<HeldType>(
-                                functor, value, arg,
-                                typename Sig::argument_types_tag()
-                        );
-                    };
-                }
-
-            template<class HeldType, class Type>
-                auto wrap_setter(Type HeldType::*pointer)
-                -> std::enable_if_t<
-                    !std::is_function<Type>::value,
-                    Setter<HeldType>
-                >
-                {
-                    return [pointer](HeldType& value, const Object& arg) {
-                        value.*pointer = arg.cast<Type>();
-                    };
-                }
-
-            /*
-             * Member function or functor taking a pointer as first argument
-             */
-            template<class HeldType, class Functor, class String, class Arg>
-            auto unreg_setter_helper(
-                Functor functor, HeldType& object, const std::string& name,
-                const Object& arg, DummyTuple<String, Arg>)
-            -> std::enable_if_t<
-                std::is_member_function_pointer<Functor>::value ||
-                IsCallableAnyReturn<Functor, HeldType*, std::string, Arg>::value
-            >
-            {
-                return std::invoke(functor, object, name, arg.cast<Arg>());
-            }
-
-            /*
-             * Function object/pointer taking a reference or value as first argument
-             */
-            template<class HeldType, class Functor, class Head, class String, class Arg>
-            auto unreg_setter_helper(
-                Functor functor, HeldType& object, const std::string& name,
-                const Object& arg, DummyTuple<Head, String, Arg>)
-            -> std::enable_if_t<
-                IsCallableAnyReturn<Functor, HeldType&, std::string, Arg>::value
-            >
-            {
-                return std::invoke(functor, object, name, arg.cast<Arg>());
-            }
-
-            /**
-             * Function object/pointer taking at only name and value
-             */
-            template<class HeldType, class Functor, class String, class Arg>
-            auto unreg_setter_helper(
-                Functor functor, HeldType& object,  const std::string& name,
-                const Object& arg, DummyTuple<String, Arg>)
-            -> std::enable_if_t<
-                !std::is_member_function_pointer<Functor>::value
-            >
-            {
-                return std::invoke(functor, name, arg.cast<Arg>());
-            }
-
-            template<class HeldType, class Functor>
-                auto unreg_setter(const Functor& functor)
-                -> UnregSetter<HeldType>
-                {
-                    return [functor](HeldType& object, const std::string& name, const Object& arg) {
-                        using Sig = FunctionSignature<Functor>;
-                        unreg_setter_helper<HeldType>(
-                            functor, object, name, arg,
-                            typename Sig::argument_types_tag()
-                        );
-                    };
-                }
-        } // namespace setter
-
-
         template<class Functor, class ReturnPolicy, class... Args>
         class FunctorWrapper
         {
@@ -1681,6 +1581,13 @@ namespace wrapper {
                 const Object::Arguments& args) const
             {
                 return call_and_bind(type, args, std::make_index_sequence<sizeof...(Args)>{});
+            }
+
+            Object operator()(
+                const TypeWrapper* type,
+                const Object& arg) const
+            {
+                return (*this)(type, Object::Arguments(1, arg));
             }
 
             Method method() const
@@ -1753,7 +1660,6 @@ namespace wrapper {
             resolve_method_arguments(Functor functor, DummyTuple<Args...>)
         { return {functor}; }
 
-
         template<class ReturnPolicy, class Functor>
         Method wrap_method(Functor functor)
         {
@@ -1810,6 +1716,58 @@ namespace wrapper {
                 }
             };
         }
+
+        template<class T>
+        struct MakeSetter
+        {
+            using type = T;
+        };
+
+        template<class Class, class Ret, class Args>
+        struct MakeSetter<Ret (Class::*)(Args)>
+        {
+            using type = Ret (Class::*)(Args);
+        };
+
+        template<class Class, class Type>
+        struct MakeSetter<Type Class::*>
+        {
+            using type = MakeSetter;
+
+            MakeSetter(Type Class::* pointer)
+                : pointer(pointer) {}
+
+            decltype(auto) operator()(Class& obj, const Type& value) const
+            {
+                return obj.*pointer = value;
+            }
+
+            Type Class::* pointer;
+        };
+
+
+
+        template<class ReturnPolicy, class Functor>
+        Setter wrap_setter(Functor functor)
+        {
+            using Setter = typename MakeSetter<Functor>::type;
+            using Sig = FunctionSignature<Setter>;
+            return resolve_method_arguments<ReturnPolicy>(
+                Setter(functor),
+                typename Sig::invoke_types_tag()
+            );
+        }
+
+        template<class ReturnPolicy, class Functor>
+        auto wrap_functor(Functor functor)
+        {
+            using Sig = FunctionSignature<Functor>;
+            return resolve_method_arguments<ReturnPolicy>(
+                functor,
+                typename Sig::invoke_types_tag()
+            );
+        }
+
     } // namespace detail
 
     template<class Class>
@@ -1849,7 +1807,10 @@ namespace wrapper {
             const std::string& name, const Read& read, const Write& write, ReturnPolicy)
         {
             getters[name] = detail::getter::wrap_getter<ReturnPolicy, HeldType>(read);
-            setters[name] = detail::setter::wrap_setter<HeldType>(write);
+            setters.insert({
+                name,
+                detail::wrap_setter<ReturnPolicy>(write)
+            });
             return *this;
         }
 
@@ -1857,7 +1818,7 @@ namespace wrapper {
     template<class T>
         ClassWrapper<Class>& ClassWrapper<Class>::fallback_setter(const T& functor)
         {
-            _fallback_setter = detail::setter::unreg_setter<HeldType>(functor);
+            _fallback_setter = detail::wrap_functor<HeldType>(functor);
             return *this;
         }
 
@@ -1876,6 +1837,13 @@ namespace wrapper {
     {
         _constructors.push_back(detail::wrap_raw_ctor<HeldType, Args...>());
         return *this;
+    }
+
+    template<class Class>
+    template<class T>
+    Object ClassWrapper<Class>::make_foreign_object(const T& obj) const
+    {
+        return type_system().object(obj);
     }
 
     template<class Class>

@@ -109,6 +109,16 @@ namespace detail {
         MemberFunctionSignature<decltype(&Class::operator())>
         object_to_function(Class*);
 
+    template<class Class>
+    struct PointerSignature
+    {
+        using argument_types_tag = DummyTuple<Class*>;
+    };
+
+    template<class Class, class Type>
+        PointerSignature<Class>
+        object_to_function(Type Class::*);
+
     struct ValueSignature
     {
         using argument_types_tag = DummyTuple<>;
