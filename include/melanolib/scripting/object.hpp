@@ -74,25 +74,25 @@ namespace wrapper {
          * \brief Returns a child object (or throws MemberNotFound)
          * \throws MemberNotFound
          */
-        virtual Object get_child(const Object& owner, const std::string& name) const = 0;
+        Object get_child(const Object& owner, const std::string& name) const;
 
         /**
          * \brief Sets a value on a child object
          * \throws MemberNotFound or TypeError
          * \pre args.size() == 2
          */
-        virtual Object set_child(const std::string& name, const Arguments& args) = 0;
+        Object set_child(const std::string& name, const Arguments& args);
 
         /**
          * \brief Calls a child function
          * \throws MemberNotFound
          */
-        virtual Object call_method(const std::string& name, const Arguments& args) = 0;
+        Object call_method(const std::string& name, const Arguments& args);
 
         /**
          * \brief Converts to an object of a different type
          */
-        virtual Object converted(const Object& owner, const std::type_info& type) const = 0;
+        Object converted(const Object& owner, const std::type_info& type) const;
 
         virtual void iterate(const IteratorCallback& callback) = 0;
 
@@ -397,98 +397,6 @@ template<class T>
 };
 
 namespace wrapper {
-
-    /**
-     * \brief Wrapper around a type (erasure base)
-     */
-    class TypeWrapper
-    {
-    public:
-        TypeWrapper(std::string&& name, const TypeSystem& type_system)
-            : _name(std::move(name)),
-            _type_system(&type_system)
-        {}
-
-        virtual ~TypeWrapper(){}
-
-        /**
-         * \brief Type name (as specified when the type has been registered)
-         */
-        const std::string& name() const
-        {
-            return _name;
-        }
-
-        /**
-         * \brief Typeinfo object for the wrapped type
-         */
-        virtual std::type_index type_index() const noexcept = 0;
-
-        const TypeSystem& type_system() const
-        {
-            return *_type_system;
-        }
-
-        /**
-         * \brief Calls a dynamic constructor
-         */
-        virtual Object make_object(const Object::Arguments& arguments) const = 0;
-
-        /**
-         * \brief Changes this type's name
-         */
-        void rename(const std::string& name)
-        {
-            _name = name;
-        }
-
-        /**
-         * \brief Creates a copy pf the run-time type
-         */
-        virtual std::unique_ptr<TypeWrapper> clone() const = 0;
-
-        /**
-         * \brief Searches the inheritance tree (Breadth-first)
-         *        to check if it inherits the given type
-         */
-        bool inherits(const TypeWrapper& wrapper) const
-        {
-            std::deque<const TypeWrapper*> wrappers;
-            wrappers.push_back(this);
-            while ( !wrappers.empty() )
-            {
-                auto top = wrappers.front();
-                wrappers.pop_front();
-                if ( top == &wrapper )
-                    return true;
-                wrappers.insert(wrappers.end(), top->supertypes.begin(), top->supertypes.end());
-            }
-            return false;
-        }
-
-    protected:
-        void inherit(const TypeWrapper& parent)
-        {
-            supertypes.push_back(&parent);
-        }
-
-    private:
-        /**
-         * \brief Moves to a different namespace
-         */
-        void migrate_to(const TypeSystem& type_system)
-        {
-            _type_system = &type_system;
-        }
-
-        std::string _name;
-        const TypeSystem* _type_system;
-        std::vector<const TypeWrapper*> supertypes;
-
-        friend TypeSystem;
-    };
-
-
     template<class Class> class ClassWrapper;
     namespace detail {
         using FunctorBase = std::function<Object(const TypeWrapper*, const Object::Arguments&)>;
@@ -592,16 +500,156 @@ namespace wrapper {
         template<class HeldType>
             using Stringizer = std::function<std::string(const HeldType&)>;
 
+    } // namespace detail
+
+    /**
+     * \brief Wrapper around a type (erasure base)
+     */
+    class TypeWrapper
+    {
+    public:
+        TypeWrapper(std::string&& name, const TypeSystem& type_system)
+            : _name(std::move(name)),
+            _type_system(&type_system)
+        {}
+
+        virtual ~TypeWrapper(){}
+
+        /**
+         * \brief Type name (as specified when the type has been registered)
+         */
+        const std::string& name() const
+        {
+            return _name;
+        }
+
+        /**
+         * \brief Typeinfo object for the wrapped type
+         */
+        virtual std::type_index type_index() const noexcept = 0;
+
+        const TypeSystem& type_system() const
+        {
+            return *_type_system;
+        }
+
+        /**
+         * \brief Changes this type's name
+         */
+        void rename(const std::string& name)
+        {
+            _name = name;
+        }
+
+        /**
+         * \brief Creates a copy pf the run-time type
+         */
+        virtual std::unique_ptr<TypeWrapper> clone() const = 0;
+
+        /**
+         * \brief Searches the inheritance tree (Breadth-first)
+         *        to check if it inherits the given type
+         */
+        bool inherits(const TypeWrapper& wrapper) const
+        {
+            std::deque<const TypeWrapper*> wrappers;
+            wrappers.push_back(this);
+            while ( !wrappers.empty() )
+            {
+                auto top = wrappers.front();
+                wrappers.pop_front();
+                if ( top == &wrapper )
+                    return true;
+                wrappers.insert(wrappers.end(), top->supertypes.begin(), top->supertypes.end());
+            }
+            return false;
+        }
+
+        /**
+         * \brief Returns an attribute of the passed object
+         * \throws MemberNotFound if \p name is not something registered
+         * with add_readonly or add_readwrite
+         */
+        Object get_value(const Object& owner, const std::string& attrname) const
+        {
+            auto iter = getters.find(attrname);
+            if ( iter == getters.end() )
+            {
+                if ( _fallback_getter )
+                    return _fallback_getter(this, {owner, make_foreign_object(attrname)});
+                throw MemberNotFound("\"" + attrname + "\" is not a member of " + name());
+            }
+            return iter->second(this, {owner});
+        }
+
+        /**
+         * \brief Sets the value of an attribute
+         * \throws MemberNotFound if \p name is not something registered
+         * with add_readwrite
+         * \throws TypeError if \p args can't be properly converted
+         * \pre args.size() == 2
+         */
+        Object set_value(const std::string& attrname, const Object::Arguments& args) const
+        {
+            auto iter = setters.find(attrname);
+            if ( iter == setters.end() )
+            {
+                if ( _fallback_setter )
+                {
+                    return _fallback_setter(this, {args[0], make_foreign_object(attrname), args[1]});
+                }
+                throw MemberNotFound("\"" + attrname + "\" is not a writable member of " + name());
+            }
+            return iter->second(this, args);
+        }
+
+        /**
+         * \brief Returns an attribute of the passed object
+         * \throws MemberNotFound if \p name is not something registered
+         * with one of the add_readonly() overloads
+         */
+        Object call_method(
+            const std::string& method,
+            const Object::Arguments& arguments) const
+        {
+            auto range = methods.equal_range(method);
+            if ( range.first == range.second )
+                throw MemberNotFound("\"" + method + "\" is not a member function of " + name());
+
+            for ( auto it = range.first; it != range.second; ++it )
+                if ( it->second.can_call(arguments) )
+                    return it->second(this, arguments);
+            throw MemberNotFound("No matching overload of \"" + method + "\" in " + name());
+        }
+
+        /**
+         * \brief Calls a dynamic constructor
+         */
+        Object make_object(const Object::Arguments& arguments) const;
+
+        /**
+         * \brief Returns an Object with a converted type
+         * \throws MemberNotFound if \p name is not something registered
+         * with conversion()
+         */
+        Object convert(const Object& owner, const std::type_info& type) const;
+
+    protected:
+        void inherit(const TypeWrapper& parent)
+        {
+            supertypes.push_back(&parent);
+        }
+
 
         /**
          * \brief String conversion for values that can be converted implicitly to a string
          *        using streams.
          */
         template<class T>
-            std::enable_if_t<
-                std::is_convertible<T, std::string>::value,
+        std::enable_if_t<
+            std::is_convertible<T, std::string>::value,
             std::string>
-            to_string(const T& value, const wrapper::TypeWrapper& type)
+            value_to_string(const T& value) const
         {
             return value;
         }
@@ -611,11 +659,11 @@ namespace wrapper {
          *        using streams.
          */
         template<class T>
-            std::enable_if_t<
-                StreamInsertable<T>::value &&
-                !std::is_convertible<T, std::string>::value,
+        std::enable_if_t<
+            StreamInsertable<T>::value &&
+            !std::is_convertible<T, std::string>::value,
             std::string>
-            to_string(const T& value, const wrapper::TypeWrapper& type)
+            value_to_string(const T& value) const
         {
             std::ostringstream stream;
             stream << value;
@@ -626,16 +674,42 @@ namespace wrapper {
          * \brief String conversion for values that can't be converted to a string
          */
         template<class T>
-            std::enable_if_t<
-                !StreamInsertable<T>::value &&
-                !std::is_convertible<T, std::string>::value,
+        std::enable_if_t<
+            !StreamInsertable<T>::value &&
+            !std::is_convertible<T, std::string>::value,
             std::string>
-            to_string(const T&, const wrapper::TypeWrapper& type)
+            value_to_string(const T&) const
         {
-            return type.name();
+            return name();
         }
 
-    } // namespace detail
+    private:
+        template<class T>
+        Object make_foreign_object(const T& obj) const;
+
+        /**
+         * \brief Moves to a different namespace
+         */
+        void migrate_to(const TypeSystem& type_system)
+        {
+            _type_system = &type_system;
+        }
+
+        std::string _name;
+        const TypeSystem* _type_system;
+        std::vector<const TypeWrapper*> supertypes;
+
+    protected:
+        detail::GetterMap getters;
+        detail::UnregGetter _fallback_getter;
+        detail::MethodMap methods;
+        detail::SetterMap setters;
+        detail::UnregSetter _fallback_setter;
+        detail::ConstructorList _constructors;
+        detail::ConverterMap converters;
+
+        friend TypeSystem;
+    };
 
     /**
      * \brief Wrapper around a class
@@ -853,84 +927,6 @@ namespace wrapper {
             return typeid(HeldType);
         }
 
-        /**
-         * \brief Returns an attribute of the passed object
-         * \throws MemberNotFound if \p name is not something registered
-         * with add_readonly or add_readwrite
-         */
-        Object get_value(const Object& owner, const std::string& attrname) const
-        {
-            auto iter = getters.find(attrname);
-            if ( iter == getters.end() )
-            {
-                if ( _fallback_getter )
-                    return _fallback_getter(this, {owner, make_foreign_object(attrname)});
-                throw MemberNotFound("\"" + attrname + "\" is not a member of " + name());
-            }
-            return iter->second(this, {owner});
-        }
-
-        /**
-         * \brief Sets the value of an attribute
-         * \throws MemberNotFound if \p name is not something registered
-         * with add_readwrite
-         * \throws TypeError if \p args can't be properly converted
-         * \pre args.size() == 2
-         */
-        Object set_value(const std::string& attrname, const Object::Arguments& args) const
-        {
-            auto iter = setters.find(attrname);
-            if ( iter == setters.end() )
-            {
-                if ( _fallback_setter )
-                {
-                    return _fallback_setter(this, {args[0], make_foreign_object(attrname), args[1]});
-                }
-                throw MemberNotFound("\"" + attrname + "\" is not a writable member of " + name());
-            }
-            return iter->second(this, args);
-        }
-
-        /**
-         * \brief Returns an attribute of the passed object
-         * \throws MemberNotFound if \p name is not something registered
-         * with one of the add_readonly() overloads
-         */
-        Object call_method(
-            const std::string& method,
-            const Object::Arguments& arguments) const
-        {
-            auto range = methods.equal_range(method);
-            if ( range.first == range.second )
-                throw MemberNotFound("\"" + method + "\" is not a member function of " + name());
-
-            for ( auto it = range.first; it != range.second; ++it )
-                if ( it->second.can_call(arguments) )
-                    return it->second(this, arguments);
-            throw MemberNotFound("No matching overload of \"" + method + "\" in " + name());
-        }
-
-        /**
-         * \brief Calls a dynamic constructor
-         */
-        Object make_object(const Object::Arguments& arguments) const override;
-
-        /**
-         * \brief Returns an Object with a converted type
-         * \throws MemberNotFound if \p name is not something registered
-         * with conversion()
-         */
-        Object convert(const Object& owner, const std::type_info& type) const
-        {
-            auto iter = converters.find(type);
-            if ( iter == converters.end() )
-            {
-                throw MemberNotFound("Cannot convert " + name() + " to " +
-                    type_system().type_name(type));
-            }
-            return iter->second(this, {owner});
-        }
-
         std::unique_ptr<TypeWrapper> clone() const override
         {
             return std::make_unique<ClassWrapper>(*this);
@@ -947,20 +943,10 @@ namespace wrapper {
         {
             if ( stringizer )
                 return stringizer(value);
-            return detail::to_string(value, *this);
+            return value_to_string(value);
         }
 
     private:
-        template<class T>
-        Object make_foreign_object(const T& obj) const;
-
-        detail::GetterMap getters;
-        detail::UnregGetter _fallback_getter;
-        detail::MethodMap methods;
-        detail::SetterMap setters;
-        detail::UnregSetter _fallback_setter;
-        detail::ConstructorList _constructors;
-        detail::ConverterMap converters;
         detail::Iterator<HeldType> iterator;
         detail::Stringizer<HeldType> stringizer;
     };
@@ -989,16 +975,6 @@ namespace wrapper {
             return class_wrapper().to_string(value.get());
         }
 
-        Object get_child(const Object& owner, const std::string& name) const override
-        {
-            return class_wrapper().get_value(owner, name);
-        }
-
-        Object set_child(const std::string& name, const Object::Arguments& args) override
-        {
-            return class_wrapper().set_value(name, args);
-        }
-
         const ClassWrapper<Class>& class_wrapper() const
         {
             return static_cast<const ClassWrapper<Class>&>(type());
@@ -1014,16 +990,6 @@ namespace wrapper {
             return value.get();
         }
 
-        Object call_method(const std::string& name, const Object::Arguments& args) override
-        {
-            return class_wrapper().call_method(name, args);
-        }
-
-        Object converted(const Object& owner, const std::type_info& type) const override
-        {
-            return class_wrapper().convert(owner, type);
-        }
-
         void iterate(const IteratorCallback& callback) override
         {
             class_wrapper().iterate(value.get(), callback);
@@ -1032,6 +998,27 @@ namespace wrapper {
     private:
         ValueHolder<Class> value;
     };
+
+
+    inline Object ValueWrapper::get_child(const Object& owner, const std::string& name) const
+    {
+        return type().get_value(owner, name);
+    }
+
+    inline Object ValueWrapper::set_child(const std::string& name, const Object::Arguments& args)
+    {
+        return type().set_value(name, args);
+    }
+
+    inline Object ValueWrapper::call_method(const std::string& name, const Object::Arguments& args)
+    {
+        return type().call_method(name, args);
+    }
+
+    inline Object ValueWrapper::converted(const Object& owner, const std::type_info& type_info) const
+    {
+        return type().convert(owner, type_info);
+    }
 
 } // namespace wrapper
 
@@ -1642,15 +1629,13 @@ namespace wrapper {
         return *this;
     }
 
-    template<class Class>
     template<class T>
-    Object ClassWrapper<Class>::make_foreign_object(const T& obj) const
+    Object TypeWrapper::make_foreign_object(const T& obj) const
     {
         return type_system().object(obj);
     }
 
-    template<class Class>
-    Object ClassWrapper<Class>::make_object(const Object::Arguments& arguments) const
+    Object TypeWrapper::make_object(const Object::Arguments& arguments) const
     {
         if ( _constructors.empty() )
             throw MemberNotFound("Class " + name() + " doesn't have a constructor");
@@ -1658,6 +1643,17 @@ namespace wrapper {
             if ( ctor.can_call(arguments) )
                 return ctor(this, arguments);
         throw MemberNotFound("No matching call to " + name() + " constructor");
+    }
+
+    Object TypeWrapper::convert(const Object& owner, const std::type_info& type) const
+    {
+        auto iter = converters.find(type);
+        if ( iter == converters.end() )
+        {
+            throw MemberNotFound("Cannot convert " + name() + " to " +
+                type_system().type_name(type));
+        }
+        return iter->second(this, {owner});
     }
 
     template<class Class>
