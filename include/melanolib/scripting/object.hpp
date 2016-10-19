@@ -487,14 +487,22 @@ namespace wrapper {
                 const TypeWrapper* type,
                 const Object::Arguments& args) const
             {
-                return call_and_bind(type, args, std::make_index_sequence<sizeof...(Args)>{});
+                return call_and_bind(type, args);
             }
 
             Object operator()(
                 const TypeWrapper* type,
                 const Object& arg) const
             {
-                return (*this)(type, Object::Arguments(1, arg));
+                return call_and_bind(type, Object::Arguments(1, arg));
+            }
+
+            /**
+             * \brief Invokes the wrapped function and returns the un-wrapped value
+             */
+            decltype(auto) raw_call(const Object::Arguments& args) const
+            {
+                return invoke<Args...>(args, std::make_index_sequence<sizeof...(Args)>{}, this);
             }
 
         private:
@@ -528,36 +536,8 @@ namespace wrapper {
                 return functor;
             }
 
-            template<std::size_t... Indices>
-            auto call_and_bind(
-                const TypeWrapper* type,
-                const Object::Arguments& args,
-                std::index_sequence<Indices...> indices) const
-            -> std::enable_if_t<
-                !std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
-                Object>
-            {
-                return call_and_bind_novoid(type, args, indices);
-            }
-
-            template<std::size_t... Indices>
-            auto call_and_bind(
-                const TypeWrapper* type,
-                const Object::Arguments& args,
-                std::index_sequence<Indices...> indices) const
-            -> std::enable_if_t<
-                std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
-                Object>
-            {
-                invoke<Args...>(args, indices, this);
-                return Object({});
-            }
-
-            template<std::size_t... Indices>
-            Object call_and_bind_novoid(
-                const TypeWrapper* type,
-                const Object::Arguments& args,
-                std::index_sequence<Indices...> indices) const;
+            Object call_and_bind(const TypeWrapper* type,
+                                 const Object::Arguments& args) const;
         };
 
         using Method = Overloadable<1>;
@@ -1609,18 +1589,33 @@ namespace wrapper {
 
     namespace detail {
 
-        template<class Functor, class ReturnPolicy, class Ret, class... Args>
-        template<std::size_t... Indices>
-        Object FunctorWrapper<Functor, ReturnPolicy, Ret, Args...>::call_and_bind_novoid(
+        template<class Fwrapper>
+        auto call_and_bind_impl(
+            const Fwrapper& fwrapper,
             const TypeWrapper* type,
-            const Object::Arguments& args,
-            std::index_sequence<Indices...> indices) const
+            const Object::Arguments& args)
+        -> std::enable_if_t<std::is_void<decltype(fwrapper.raw_call(args))>::value, Object>
         {
+            fwrapper.raw_call(args);
+            return Object({});
+        }
 
-            return type->type_system().bind(
-                invoke<Args...>(args, indices, this),
-                ReturnPolicy{}
-            );
+        template<class Functor, class ReturnPolicy, class Ret, class... Args>
+        auto call_and_bind_impl(
+            const FunctorWrapper<Functor, ReturnPolicy, Ret, Args...>& fwrapper,
+            const TypeWrapper* type,
+            const Object::Arguments& args)
+        -> std::enable_if_t<!std::is_void<decltype(fwrapper.raw_call(args))>::value, Object>
+        {
+            return type->type_system().bind(fwrapper.raw_call(args), ReturnPolicy{});
+        }
+
+        template<class Functor, class ReturnPolicy, class Ret, class... Args>
+        Object FunctorWrapper<Functor, ReturnPolicy, Ret, Args...>::call_and_bind(
+            const TypeWrapper* type,
+            const Object::Arguments& args) const
+        {
+            return call_and_bind_impl(*this, type, args);
         }
 
         template<class Class, class... Args>
