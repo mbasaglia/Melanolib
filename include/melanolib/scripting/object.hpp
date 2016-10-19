@@ -398,6 +398,7 @@ template<class T>
 
 namespace wrapper {
     template<class Class> class ClassWrapper;
+    class TypeWrapper;
     namespace detail {
         using FunctorBase = std::function<Object(const TypeWrapper*, const Object::Arguments&)>;
 
@@ -474,6 +475,91 @@ namespace wrapper {
             FunctorBase functor;
         };
 
+        template<class Functor, class ReturnPolicy, class Ret, class... Args>
+        class FunctorWrapper
+        {
+        public:
+            using return_type = Ret;
+
+            Functor functor;
+
+            Object operator()(
+                const TypeWrapper* type,
+                const Object::Arguments& args) const
+            {
+                return call_and_bind(type, args, std::make_index_sequence<sizeof...(Args)>{});
+            }
+
+            Object operator()(
+                const TypeWrapper* type,
+                const Object& arg) const
+            {
+                return (*this)(type, Object::Arguments(1, arg));
+            }
+
+        private:
+            /*
+             * Invokable
+             */
+            template<class... Args2, std::size_t... Indices>
+            auto invoke(
+                const Object::Arguments& args,
+                std::index_sequence<Indices...> seq,
+                const FunctorWrapper*
+            ) const
+                -> decltype(std::__invoke(functor, args[Indices].cast<Args2>()...))
+            {
+                auto iter = args.begin();
+                if ( sizeof...(Args2) < args.size() )
+                    ++iter;
+                return std::__invoke(functor, iter[Indices].cast<Args2>()...);
+            }
+
+            /*
+             * Not ivokable
+             */
+            template<class... Args2, std::size_t... Indices>
+            decltype(auto) invoke(
+                const Object::Arguments& args,
+                std::index_sequence<Indices...>,
+                const void*
+            ) const
+            {
+                return functor;
+            }
+
+            template<std::size_t... Indices>
+            auto call_and_bind(
+                const TypeWrapper* type,
+                const Object::Arguments& args,
+                std::index_sequence<Indices...> indices) const
+            -> std::enable_if_t<
+                !std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
+                Object>
+            {
+                return call_and_bind_novoid(type, args, indices);
+            }
+
+            template<std::size_t... Indices>
+            auto call_and_bind(
+                const TypeWrapper* type,
+                const Object::Arguments& args,
+                std::index_sequence<Indices...> indices) const
+            -> std::enable_if_t<
+                std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
+                Object>
+            {
+                invoke<Args...>(args, indices, this);
+                return Object({});
+            }
+
+            template<std::size_t... Indices>
+            Object call_and_bind_novoid(
+                const TypeWrapper* type,
+                const Object::Arguments& args,
+                std::index_sequence<Indices...> indices) const;
+        };
+
         using Method = Overloadable<1>;
         using MethodMap = std::unordered_multimap<std::string, Method>;
 
@@ -499,6 +585,107 @@ namespace wrapper {
 
         template<class HeldType>
             using Stringizer = std::function<std::string(const HeldType&)>;
+
+        } // namespace detail
+
+        namespace detail {
+
+        template<class ReturnPolicy, class Ret, class Functor, class... Args>
+        FunctorWrapper<Functor, ReturnPolicy, Ret, Args...>
+            resolve_method_arguments(Functor functor, DummyTuple<Args...>)
+        { return {functor}; }
+
+        template<class ReturnPolicy, class Functor>
+        Method wrap_method(Functor functor)
+        {
+            using Sig = FunctionSignature<Functor>;
+            return {
+                typename Sig::invoke_types_tag(),
+                resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
+                    functor,
+                    typename Sig::invoke_types_tag()
+                )
+            };
+        }
+
+        template<class ReturnPolicy, class Functor>
+        Constructor wrap_ctor(Functor functor)
+        {
+            using Sig = FunctionSignature<Functor>;
+            return {
+                typename Sig::invoke_types_tag(),
+                resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
+                    functor,
+                    typename Sig::invoke_types_tag()
+                )
+            };
+        }
+
+        /**
+         * Constructor
+         */
+        template<class Class, class... Args, std::size_t... Indices>
+        Class raw_ctor_helper(
+            const Object::Arguments& args,
+            std::index_sequence<Indices...>)
+        {
+            return Class(args[Indices].cast<Args>()...);
+        }
+
+        /** Constructor
+         * \brief Exposes a class constructor
+         */
+        template<class Class, class... Args>
+        Constructor wrap_raw_ctor();
+
+        template<class T>
+        struct MakeSetter
+        {
+            using type = T;
+        };
+
+        template<class Class, class Ret, class Args>
+        struct MakeSetter<Ret (Class::*)(Args)>
+        {
+            using type = Ret (Class::*)(Args);
+        };
+
+        template<class Class, class Type>
+        struct MakeSetter<Type Class::*>
+        {
+            using type = MakeSetter;
+
+            MakeSetter(Type Class::* pointer)
+                : pointer(pointer) {}
+
+            decltype(auto) operator()(Class& obj, const Type& value) const
+            {
+                return obj.*pointer = value;
+            }
+
+            Type Class::* pointer;
+        };
+
+        template<class ReturnPolicy, class Functor>
+        Setter wrap_setter(Functor functor)
+        {
+            using Setter = typename MakeSetter<Functor>::type;
+            using Sig = FunctionSignature<Setter>;
+            return resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
+                Setter(functor),
+                typename Sig::invoke_types_tag()
+            );
+        }
+
+        template<class ReturnPolicy, class Functor>
+        auto wrap_functor(Functor functor)
+        {
+            using Sig = FunctionSignature<Functor>;
+            return resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
+                functor,
+                typename Sig::invoke_types_tag()
+            );
+        }
 
     } // namespace detail
 
@@ -625,7 +812,15 @@ namespace wrapper {
         /**
          * \brief Calls a dynamic constructor
          */
-        Object make_object(const Object::Arguments& arguments) const;
+        Object make_object(const Object::Arguments& arguments) const
+        {
+            if ( _constructors.empty() )
+                throw MemberNotFound("Class " + name() + " doesn't have a constructor");
+            for ( const auto& ctor : _constructors )
+                if ( ctor.can_call(arguments) )
+                    return ctor(this, arguments);
+            throw MemberNotFound("No matching call to " + name() + " constructor");
+        }
 
         /**
          * \brief Returns an Object with a converted type
@@ -735,7 +930,11 @@ namespace wrapper {
          * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
          */
         template<class T, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& add_readonly(const std::string& name, const T& value, ReturnPolicy = {});
+            ClassWrapper& add_readonly(const std::string& name, const T& value, ReturnPolicy = {})
+            {
+                getters[name] = detail::wrap_functor<ReturnPolicy>(value);
+                return *this;
+            }
 
 
         /**
@@ -748,7 +947,11 @@ namespace wrapper {
          *                      how to bind the returned value
          */
         template<class T, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& fallback_getter(const T& functor, ReturnPolicy = {});
+            ClassWrapper& fallback_getter(const T& functor, ReturnPolicy = {})
+            {
+                _fallback_getter = detail::wrap_functor<ReturnPolicy>(functor);
+                return *this;
+            }
 
         /**
          * \brief Exposes an attribute
@@ -768,7 +971,15 @@ namespace wrapper {
                 const std::string& name,
                 const Read& read,
                 const Write& write,
-                ReturnPolicy = {});
+                ReturnPolicy = {})
+        {
+            getters[name] = detail::wrap_functor<ReturnPolicy>(read);
+            setters.insert({
+                name,
+                detail::wrap_setter<ReturnPolicy>(write)
+            });
+            return *this;
+        }
 
         /**
          * \brief Exposes an attribute
@@ -797,7 +1008,11 @@ namespace wrapper {
          *   pointer to HeldType, a string, and an additional argument
          */
         template<class T>
-            ClassWrapper& fallback_setter(const T& functor);
+            ClassWrapper& fallback_setter(const T& functor)
+        {
+            _fallback_setter = detail::wrap_functor<CopyPolicy>(functor);
+            return *this;
+        }
 
         /**
          * \brief Exposes a member function
@@ -812,7 +1027,14 @@ namespace wrapper {
          */
         template<class T, class ReturnPolicy = CopyPolicy>
             ClassWrapper& add_method(const std::string& name, const T& value,
-                                     ReturnPolicy = {});
+                                     ReturnPolicy = {})
+        {
+            methods.insert({
+                name,
+                detail::wrap_method<ReturnPolicy>(value)
+            });
+            return *this;
+        }
 
         /**
          * \brief Sets the function used as a constructor
@@ -825,14 +1047,22 @@ namespace wrapper {
          * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
          */
         template<class T, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& constructor(const T& functor, ReturnPolicy = {});
+            ClassWrapper& constructor(const T& functor, ReturnPolicy = {})
+            {
+                _constructors.push_back(detail::wrap_ctor<ReturnPolicy>(functor));
+                return *this;
+            }
 
         /**
          * \brief Exposes a constructor
          * \tparam Args constructor arguments
          */
         template<class... Args>
-            ClassWrapper& constructor();
+            ClassWrapper& constructor()
+            {
+                _constructors.push_back(detail::wrap_raw_ctor<HeldType, Args...>());
+                return *this;
+            }
 
         /**
          * \brief Exposes a conversion operator
@@ -849,7 +1079,11 @@ namespace wrapper {
          * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
          */
         template<class Target, class Functor, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {});
+            ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {})
+        {
+            converters[typeid(Target)] = detail::wrap_functor<ReturnPolicy>(functor);
+            return *this;
+        }
 
         /**
          * \brief Exposes a conversion operator
@@ -857,7 +1091,14 @@ namespace wrapper {
          * The target type is deduced from the result of a call to \p Functor
          */
         template<class Functor, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {});
+            ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {})
+        {
+            auto getter = detail::wrap_functor<ReturnPolicy>(functor);
+            using GetterType = decltype(getter);
+            using Target = std::decay_t<typename GetterType::return_type>;
+            converters[typeid(Target)] = std::move(getter);
+            return *this;
+        }
 
         /**
          * \brief Exposes a function to be used for to_string
@@ -919,8 +1160,16 @@ namespace wrapper {
          * \tparam T Type registered on the same type system
          */
         template<class T>
-        ClassWrapper& inherit();
-        ClassWrapper& inherit(const std::string& type_name);
+        ClassWrapper& inherit()
+        {
+            TypeWrapper::inherit(type_system().template wrapper_for<T>());
+            return *this;
+        }
+
+        ClassWrapper& inherit(const std::string& type_name)
+        {
+            TypeWrapper::inherit(type_system().wrapper_for(type_name));
+        }
 
         std::type_index type_index() const noexcept override
         {
@@ -1361,137 +1610,19 @@ namespace wrapper {
     namespace detail {
 
         template<class Functor, class ReturnPolicy, class Ret, class... Args>
-        class FunctorWrapper
-        {
-        public:
-            using return_type = Ret;
-
-            Functor functor;
-
-            Object operator()(
-                const TypeWrapper* type,
-                const Object::Arguments& args) const
-            {
-                return call_and_bind(type, args, std::make_index_sequence<sizeof...(Args)>{});
-            }
-
-            Object operator()(
-                const TypeWrapper* type,
-                const Object& arg) const
-            {
-                return (*this)(type, Object::Arguments(1, arg));
-            }
-
-            Method method() const
-            {
-                return {DummyTuple<Args...>{}, *this};
-            }
-
-        private:
-            /*
-             * Invokable
-             */
-            template<class... Args2, std::size_t... Indices>
-            auto invoke(
-                const Object::Arguments& args,
-                std::index_sequence<Indices...> seq,
-                const FunctorWrapper*
-            ) const
-                -> decltype(std::__invoke(functor, args[Indices].cast<Args2>()...))
-            {
-                auto iter = args.begin();
-                if ( sizeof...(Args2) < args.size() )
-                    ++iter;
-                return std::__invoke(functor, iter[Indices].cast<Args2>()...);
-            }
-
-            /*
-             * Not ivokable
-             */
-            template<class... Args2, std::size_t... Indices>
-            decltype(auto) invoke(
-                const Object::Arguments& args,
-                std::index_sequence<Indices...>,
-                const void*
-            ) const
-            {
-                return functor;
-            }
-
-            template<std::size_t... Indices>
-            auto call_and_bind(
-                const TypeWrapper* type,
-                const Object::Arguments& args,
-                std::index_sequence<Indices...> indices) const
-            -> std::enable_if_t<
-                !std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
-                Object>
-            {
-                return type->type_system().bind(
-                    invoke<Args...>(args, indices, this),
-                    ReturnPolicy{}
-                );
-            }
-
-            template<std::size_t... Indices>
-            auto call_and_bind(
-                const TypeWrapper* type,
-                const Object::Arguments& args,
-                std::index_sequence<Indices...> indices) const
-            -> std::enable_if_t<
-                std::is_void<decltype(invoke<Args...>(args, indices, this))>::value,
-                Object>
-            {
-                invoke<Args...>(args, indices, this);
-                return Object({});
-            }
-        };
-
-        template<class ReturnPolicy, class Ret, class Functor, class... Args>
-        FunctorWrapper<Functor, ReturnPolicy, Ret, Args...>
-            resolve_method_arguments(Functor functor, DummyTuple<Args...>)
-        { return {functor}; }
-
-        template<class ReturnPolicy, class Functor>
-        Method wrap_method(Functor functor)
-        {
-            using Sig = FunctionSignature<Functor>;
-            return {
-                typename Sig::invoke_types_tag(),
-                resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
-                    functor,
-                    typename Sig::invoke_types_tag()
-                )
-            };
-        }
-
-        template<class ReturnPolicy, class Functor>
-        Constructor wrap_ctor(Functor functor)
-        {
-            using Sig = FunctionSignature<Functor>;
-            return {
-                typename Sig::invoke_types_tag(),
-                resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
-                    functor,
-                    typename Sig::invoke_types_tag()
-                )
-            };
-        }
-
-        /**
-         * Constructor
-         */
-        template<class Class, class... Args, std::size_t... Indices>
-        Class raw_ctor_helper(
+        template<std::size_t... Indices>
+        Object FunctorWrapper<Functor, ReturnPolicy, Ret, Args...>::call_and_bind_novoid(
+            const TypeWrapper* type,
             const Object::Arguments& args,
-            std::index_sequence<Indices...>)
+            std::index_sequence<Indices...> indices) const
         {
-            return Class(args[Indices].cast<Args>()...);
+
+            return type->type_system().bind(
+                invoke<Args...>(args, indices, this),
+                ReturnPolicy{}
+            );
         }
 
-        /** Constructor
-            * \brief Exposes a class constructor
-            */
         template<class Class, class... Args>
         Constructor wrap_raw_ctor()
         {
@@ -1509,188 +1640,6 @@ namespace wrapper {
             };
         }
 
-        template<class T>
-        struct MakeSetter
-        {
-            using type = T;
-        };
-
-        template<class Class, class Ret, class Args>
-        struct MakeSetter<Ret (Class::*)(Args)>
-        {
-            using type = Ret (Class::*)(Args);
-        };
-
-        template<class Class, class Type>
-        struct MakeSetter<Type Class::*>
-        {
-            using type = MakeSetter;
-
-            MakeSetter(Type Class::* pointer)
-                : pointer(pointer) {}
-
-            decltype(auto) operator()(Class& obj, const Type& value) const
-            {
-                return obj.*pointer = value;
-            }
-
-            Type Class::* pointer;
-        };
-
-        template<class ReturnPolicy, class Functor>
-        Setter wrap_setter(Functor functor)
-        {
-            using Setter = typename MakeSetter<Functor>::type;
-            using Sig = FunctionSignature<Setter>;
-            return resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
-                Setter(functor),
-                typename Sig::invoke_types_tag()
-            );
-        }
-
-        template<class ReturnPolicy, class Functor>
-        auto wrap_functor(Functor functor)
-        {
-            using Sig = FunctionSignature<Functor>;
-            return resolve_method_arguments<ReturnPolicy, typename Sig::return_type>(
-                functor,
-                typename Sig::invoke_types_tag()
-            );
-        }
-
-    } // namespace detail
-
-    template<class Class>
-    template<class T, class ReturnPolicy>
-        ClassWrapper<Class>& ClassWrapper<Class>::add_readonly(
-            const std::string& name, const T& value, ReturnPolicy)
-        {
-            getters[name] = detail::wrap_functor<ReturnPolicy>(value);
-            return *this;
-        }
-
-
-    template<class Class>
-    template<class T, class ReturnPolicy>
-        ClassWrapper<Class>& ClassWrapper<Class>::fallback_getter(
-            const T& functor, ReturnPolicy)
-        {
-            _fallback_getter = detail::wrap_functor<ReturnPolicy>(functor);
-            return *this;
-        }
-
-    template<class Class>
-    template<class T, class ReturnPolicy>
-        ClassWrapper<Class>& ClassWrapper<Class>::add_method(
-            const std::string& name, const T& value, ReturnPolicy)
-        {
-            methods.insert({
-                name,
-                detail::wrap_method<ReturnPolicy>(value)
-            });
-            return *this;
-        }
-
-    template<class Class>
-    template<class Read, class Write, class ReturnPolicy>
-        ClassWrapper<Class>& ClassWrapper<Class>::add_readwrite(
-            const std::string& name, const Read& read, const Write& write, ReturnPolicy)
-        {
-            getters[name] = detail::wrap_functor<ReturnPolicy>(read);
-            setters.insert({
-                name,
-                detail::wrap_setter<ReturnPolicy>(write)
-            });
-            return *this;
-        }
-
-    template<class Class>
-    template<class T>
-        ClassWrapper<Class>& ClassWrapper<Class>::fallback_setter(const T& functor)
-        {
-            _fallback_setter = detail::wrap_functor<CopyPolicy>(functor);
-            return *this;
-        }
-
-    template<class Class>
-    template<class T, class ReturnPolicy>
-        ClassWrapper<Class>& ClassWrapper<Class>::constructor(
-            const T& functor, ReturnPolicy)
-    {
-        _constructors.push_back(detail::wrap_ctor<ReturnPolicy>(functor));
-        return *this;
-    }
-
-    template<class Class>
-    template<class... Args>
-        ClassWrapper<Class>& ClassWrapper<Class>::constructor()
-    {
-        _constructors.push_back(detail::wrap_raw_ctor<HeldType, Args...>());
-        return *this;
-    }
-
-    template<class T>
-    Object TypeWrapper::make_foreign_object(const T& obj) const
-    {
-        return type_system().object(obj);
-    }
-
-    Object TypeWrapper::make_object(const Object::Arguments& arguments) const
-    {
-        if ( _constructors.empty() )
-            throw MemberNotFound("Class " + name() + " doesn't have a constructor");
-        for ( const auto& ctor : _constructors )
-            if ( ctor.can_call(arguments) )
-                return ctor(this, arguments);
-        throw MemberNotFound("No matching call to " + name() + " constructor");
-    }
-
-    Object TypeWrapper::convert(const Object& owner, const std::type_info& type) const
-    {
-        auto iter = converters.find(type);
-        if ( iter == converters.end() )
-        {
-            throw MemberNotFound("Cannot convert " + name() + " to " +
-                type_system().type_name(type));
-        }
-        return iter->second(this, {owner});
-    }
-
-    template<class Class>
-    template<class Target, class Functor, class ReturnPolicy>
-        ClassWrapper<Class>& ClassWrapper<Class>::conversion(
-            const Functor& functor, ReturnPolicy)
-        {
-            converters[typeid(Target)] = detail::wrap_functor<ReturnPolicy>(functor);
-            return *this;
-        }
-
-    template<class Class>
-    template<class Functor, class ReturnPolicy>
-        ClassWrapper<Class>& ClassWrapper<Class>::conversion(const Functor& functor, ReturnPolicy)
-        {
-            auto getter = detail::wrap_functor<ReturnPolicy>(functor);
-            using GetterType = decltype(getter);
-            using Target = std::decay_t<typename GetterType::return_type>;
-            converters[typeid(Target)] = std::move(getter);
-            return *this;
-        }
-
-    template<class Class>
-    template<class T>
-        ClassWrapper<Class>& ClassWrapper<Class>::inherit()
-        {
-            TypeWrapper::inherit(type_system().template wrapper_for<T>());
-        }
-
-    template<class Class>
-        ClassWrapper<Class>& ClassWrapper<Class>::inherit(const std::string& type_name)
-        {
-            TypeWrapper::inherit(type_system().wrapper_for(type_name));
-        }
-
-
-    namespace detail {
         template<class Type>
         struct CastTemplate
         {
@@ -1713,7 +1662,7 @@ namespace wrapper {
             template<class T>
             static decltype(auto) cast_helper(const Object& object, ValueWrapper*)
             {
-                    return get_reference<T>(object);
+                return get_reference<T>(object);
             }
         };
 
@@ -1723,7 +1672,26 @@ namespace wrapper {
         {
             return CastTemplate<CastBase<T>>::template cast_helper<T>(object, value);
         }
+
     } // namespace detail
+
+
+    template<class T>
+    Object TypeWrapper::make_foreign_object(const T& obj) const
+    {
+        return type_system().object(obj);
+    }
+
+    Object TypeWrapper::convert(const Object& owner, const std::type_info& type) const
+    {
+        auto iter = converters.find(type);
+        if ( iter == converters.end() )
+        {
+            throw MemberNotFound("Cannot convert " + name() + " to " +
+                type_system().type_name(type));
+        }
+        return iter->second(this, {owner});
+    }
 } // namespace wrapper
 
 template<class T>
