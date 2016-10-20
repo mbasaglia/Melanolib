@@ -115,7 +115,17 @@ struct Identity
 /**
  * \brief Function object returning the begin iterator
  */
+template<class T = void>
 struct Begin
+{
+    decltype(auto) operator()(T& t) const
+    {
+        return std::begin(t);
+    }
+};
+
+template<>
+struct Begin<void>
 {
     template<class T>
     decltype(auto) operator()(T&& t) const
@@ -127,7 +137,17 @@ struct Begin
 /**
  * \brief Function object returning the begin iterator
  */
+template<class T = void>
 struct End
+{
+    decltype(auto) operator()(T& t) const
+    {
+        return std::end(t);
+    }
+};
+
+template<>
+struct End<void>
 {
     template<class T>
     decltype(auto) operator()(T&& t) const
@@ -135,6 +155,7 @@ struct End
         return std::end(std::forward<T>(t));
     }
 };
+
 
 } // namespace melanolib
 #endif // FUNCTIONAL_HPP

@@ -94,7 +94,7 @@ namespace wrapper {
          */
         Object converted(const Object& owner, const std::type_info& type) const;
 
-        virtual void iterate(const IteratorCallback& callback) = 0;
+        void iterate(const Object& owner, const IteratorCallback& callback);
 
     private:
         const TypeWrapper* _type;
@@ -252,7 +252,7 @@ public:
     template<class Functor>
     void iterate(Functor&& func) const
     {
-        return value->iterate(std::forward<Functor>(func));
+        return value->iterate(*this, std::forward<Functor>(func));
     }
 
     /**
@@ -397,7 +397,7 @@ template<class T>
 };
 
 namespace wrapper {
-    template<class Class> class ClassWrapper;
+
     class TypeWrapper;
     namespace detail {
         using FunctorBase = std::function<Object(const TypeWrapper*, const Object::Arguments&)>;
@@ -557,11 +557,10 @@ namespace wrapper {
 
         using ConverterMap = std::unordered_map<std::type_index, Getter>;
 
-        template<class HeldType>
-            using Iterator = std::function<void(
-                const ClassWrapper<HeldType>*,
-                HeldType&,
-                const IteratorCallback&)>;
+        using Iterator = std::function<void(
+            const TypeWrapper*,
+            const Object&,
+            const IteratorCallback&)>;
 
         using Stringizer = std::function<std::string(const Object&)>;
 
@@ -742,7 +741,7 @@ namespace wrapper {
             if ( iter == getters.end() )
             {
                 if ( _fallback_getter )
-                    return _fallback_getter(this, {owner, make_foreign_object(attrname)});
+                    return _fallback_getter(this, {owner, foreign(attrname)});
                 throw MemberNotFound("\"" + attrname + "\" is not a member of " + name());
             }
             return iter->second(this, {owner});
@@ -762,7 +761,7 @@ namespace wrapper {
             {
                 if ( _fallback_setter )
                 {
-                    return _fallback_setter(this, {args[0], make_foreign_object(attrname), args[1]});
+                    return _fallback_setter(this, {args[0], foreign(attrname), args[1]});
                 }
                 throw MemberNotFound("\"" + attrname + "\" is not a writable member of " + name());
             }
@@ -815,6 +814,17 @@ namespace wrapper {
             return stringizer(value);
         }
 
+        void iterate(const Object& owner, const IteratorCallback& callback) const
+        {
+            if ( !iterator )
+                throw MemberNotFound("Cannot iterate " + name());
+            iterator(this, owner, callback);
+        }
+
+        /// \todo make private
+        template<class T, class Policy = CopyPolicy>
+        Object foreign(T&& obj, Policy = {}) const;
+        
     protected:
         void inherit(const TypeWrapper& parent)
         {
@@ -822,8 +832,6 @@ namespace wrapper {
         }
 
     private:
-        template<class T>
-        Object make_foreign_object(const T& obj) const;
 
         /**
          * \brief Moves to a different namespace
@@ -846,6 +854,7 @@ namespace wrapper {
         detail::ConstructorList _constructors;
         detail::ConverterMap converters;
         detail::Stringizer stringizer;
+        detail::Iterator iterator;
 
         friend TypeSystem;
     };
@@ -1127,16 +1136,20 @@ namespace wrapper {
                 const Filter& filter = {},
                 ReturnPolicy = {})
         {
-            iterator = [begin, end, filter](
-                const ClassWrapper* type,
-                HeldType& value,
+            iterator = [
+                begin = detail::wrap_functor<CopyPolicy>(begin),
+                end = detail::wrap_functor<CopyPolicy>(end),
+                filter
+            ](
+                const TypeWrapper* type,
+                const Object& value,
                 const std::function<void (const Object&)>& callback )
             {
-                auto iter = std::invoke(begin, value);
-                auto enditer = std::invoke(end, value);
+                auto iter = begin.raw_call(Object::Arguments(1, value));
+                auto enditer = end.raw_call(Object::Arguments(1, value));
                 for ( ; iter != enditer; ++iter )
                 {
-                    callback(type->type_system().bind(filter(*iter), ReturnPolicy{}));
+                    callback(type->foreign(filter(*iter), ReturnPolicy{}));
                 }
             };
             return *this;
@@ -1150,7 +1163,12 @@ namespace wrapper {
         template<class ReturnPolicy = CopyPolicy>
             ClassWrapper& make_iterable(ReturnPolicy = {})
         {
-            return make_iterable(Begin{}, End{}, Identity{}, ReturnPolicy{});
+            return make_iterable(
+                Begin<HeldType>{},
+                End<HeldType>{},
+                Identity{},
+                ReturnPolicy{}
+            );
         }
 
         /**
@@ -1178,16 +1196,6 @@ namespace wrapper {
         {
             return std::make_unique<ClassWrapper>(*this);
         }
-
-        void iterate(HeldType& owner, const IteratorCallback& callback) const
-        {
-            if ( !iterator )
-                throw MemberNotFound("Cannot iterate " + name());
-            iterator(this, owner, callback);
-        }
-
-    private:
-        detail::Iterator<HeldType> iterator;
     };
 
 } // namespace wrapper
@@ -1209,11 +1217,6 @@ namespace wrapper {
             : ValueWrapper(type), value(reference)
         {}
 
-        const ClassWrapper<Class>& class_wrapper() const
-        {
-            return static_cast<const ClassWrapper<Class>&>(type());
-        }
-
         const Class& get() const
         {
             return value.get();
@@ -1223,12 +1226,6 @@ namespace wrapper {
         {
             return value.get();
         }
-
-        void iterate(const IteratorCallback& callback) override
-        {
-            class_wrapper().iterate(value.get(), callback);
-        }
-
     private:
         ValueHolder<Class> value;
     };
@@ -1258,6 +1255,12 @@ namespace wrapper {
     {
         return type().to_string(owner);
     }
+
+    inline void ValueWrapper::iterate(const Object& owner, const IteratorCallback& callback)
+    {
+        type().iterate(owner, callback);
+    }
+
 
 } // namespace wrapper
 
@@ -1681,10 +1684,10 @@ namespace wrapper {
     } // namespace detail
 
 
-    template<class T>
-    Object TypeWrapper::make_foreign_object(const T& obj) const
+    template<class T, class Policy>
+    Object TypeWrapper::foreign(T&& obj, Policy) const
     {
-        return type_system().object(obj);
+        return type_system().bind(obj, Policy{});
     }
 
     Object TypeWrapper::convert(const Object& owner, const std::type_info& type) const

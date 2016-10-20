@@ -919,8 +919,8 @@ BOOST_AUTO_TEST_CASE( test_iterable_filter )
     TypeSystem ns;
     ns.register_type<ContainerType>("Map")
         .make_iterable(
-            melanolib::Begin{},
-            melanolib::End{},
+            melanolib::Begin<ContainerType>{},
+            melanolib::End<ContainerType>{},
             [&ns](const ContainerType::value_type& pair){
                 auto object = ns.object<SimpleType>();
                 object.set("key", ns.object(pair.first));
