@@ -68,7 +68,7 @@ namespace wrapper {
         /**
          * \brief Converts the contained value into a string
          */
-        virtual std::string to_string() const = 0;
+        std::string to_string(const Object& owner) const;
 
         /**
          * \brief Returns a child object (or throws MemberNotFound)
@@ -242,7 +242,7 @@ public:
      */
     std::string to_string() const
     {
-        return value->to_string();
+        return value->to_string(*this);
     }
 
     /**
@@ -563,8 +563,7 @@ namespace wrapper {
                 HeldType&,
                 const IteratorCallback&)>;
 
-        template<class HeldType>
-            using Stringizer = std::function<std::string(const HeldType&)>;
+        using Stringizer = std::function<std::string(const Object&)>;
 
         } // namespace detail
 
@@ -809,53 +808,17 @@ namespace wrapper {
          */
         Object convert(const Object& owner, const std::type_info& type) const;
 
+        std::string to_string(const Object& value) const
+        {
+            if ( !stringizer )
+                throw MemberNotFound("Cannot convert " + name() + " to string");
+            return stringizer(value);
+        }
+
     protected:
         void inherit(const TypeWrapper& parent)
         {
             supertypes.push_back(&parent);
-        }
-
-
-        /**
-         * \brief String conversion for values that can be converted implicitly to a string
-         *        using streams.
-         */
-        template<class T>
-        std::enable_if_t<
-            std::is_convertible<T, std::string>::value,
-            std::string>
-            value_to_string(const T& value) const
-        {
-            return value;
-        }
-
-        /**
-         * \brief String conversion for values that can be converted to a string
-         *        using streams.
-         */
-        template<class T>
-        std::enable_if_t<
-            StreamInsertable<T>::value &&
-            !std::is_convertible<T, std::string>::value,
-            std::string>
-            value_to_string(const T& value) const
-        {
-            std::ostringstream stream;
-            stream << value;
-            return stream.str();
-        }
-
-        /**
-         * \brief String conversion for values that can't be converted to a string
-         */
-        template<class T>
-        std::enable_if_t<
-            !StreamInsertable<T>::value &&
-            !std::is_convertible<T, std::string>::value,
-            std::string>
-            value_to_string(const T&) const
-        {
-            return name();
         }
 
     private:
@@ -882,9 +845,55 @@ namespace wrapper {
         detail::UnregSetter _fallback_setter;
         detail::ConstructorList _constructors;
         detail::ConverterMap converters;
+        detail::Stringizer stringizer;
 
         friend TypeSystem;
     };
+
+    namespace detail {
+                /**
+         * \brief String conversion for values that can be converted implicitly to a string
+         *        using streams.
+         */
+        template<class T>
+        std::enable_if_t<
+            std::is_convertible<T, std::string>::value,
+            std::string>
+            value_to_string(const T& value, const TypeWrapper&)
+        {
+            return value;
+        }
+
+        /**
+         * \brief String conversion for values that can be converted to a string
+         *        using streams.
+         */
+        template<class T>
+        std::enable_if_t<
+            StreamInsertable<T>::value &&
+            !std::is_convertible<T, std::string>::value,
+            std::string>
+            value_to_string(const T& value, const TypeWrapper&)
+        {
+            std::ostringstream stream;
+            stream << value;
+            return stream.str();
+        }
+
+        /**
+         * \brief String conversion for values that can't be converted to a string
+         */
+        template<class T>
+        std::enable_if_t<
+            !StreamInsertable<T>::value &&
+            !std::is_convertible<T, std::string>::value,
+            std::string>
+            value_to_string(const T&, const TypeWrapper& type)
+        {
+            return type.name();
+        }
+
+    } // namespace detail
 
     /**
      * \brief Wrapper around a class
@@ -897,7 +906,11 @@ namespace wrapper {
 
         ClassWrapper(std::string name, const TypeSystem& type_system)
             : TypeWrapper(std::move(name), type_system)
-        {}
+        {
+            stringizer = [](const Object& obj){
+                return detail::value_to_string(obj.cast<HeldType>(), obj.type());
+            };
+        }
 
         /**
          * \brief Exposes an attribute
@@ -1087,10 +1100,15 @@ namespace wrapper {
          * * A pointer to a member function of HeldType taking no arguments
          * * Any function object taking a const HeldType& argument
          */
-        template<class Functor, class ReturnPolicy = CopyPolicy>
+        template<class Functor>
             ClassWrapper& string_conversion(const Functor& functor)
             {
-                stringizer = functor;
+                stringizer = [
+                    wrapper=detail::wrap_functor<CopyPolicy>(functor)
+                ](const Object& obj) -> std::string
+                {
+                    return wrapper.raw_call(Object::Arguments(1, obj));
+                };
                 return *this;
             }
 
@@ -1168,16 +1186,8 @@ namespace wrapper {
             iterator(this, owner, callback);
         }
 
-        std::string to_string(const HeldType& value) const
-        {
-            if ( stringizer )
-                return stringizer(value);
-            return value_to_string(value);
-        }
-
     private:
         detail::Iterator<HeldType> iterator;
-        detail::Stringizer<HeldType> stringizer;
     };
 
 } // namespace wrapper
@@ -1198,11 +1208,6 @@ namespace wrapper {
         explicit ObjectWrapper(const Ref<Class>& reference, const ClassWrapper<Class>* type)
             : ValueWrapper(type), value(reference)
         {}
-
-        std::string to_string() const override
-        {
-            return class_wrapper().to_string(value.get());
-        }
 
         const ClassWrapper<Class>& class_wrapper() const
         {
@@ -1247,6 +1252,11 @@ namespace wrapper {
     inline Object ValueWrapper::converted(const Object& owner, const std::type_info& type_info) const
     {
         return type().convert(owner, type_info);
+    }
+
+    inline std::string ValueWrapper::to_string(const Object& owner) const
+    {
+        return type().to_string(owner);
     }
 
 } // namespace wrapper
