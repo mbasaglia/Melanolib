@@ -65,37 +65,6 @@ namespace wrapper {
             return *_type;
         }
 
-        /**
-         * \brief Converts the contained value into a string
-         */
-        std::string to_string(const Object& owner) const;
-
-        /**
-         * \brief Returns a child object (or throws MemberNotFound)
-         * \throws MemberNotFound
-         */
-        Object get_child(const Object& owner, const std::string& name) const;
-
-        /**
-         * \brief Sets a value on a child object
-         * \throws MemberNotFound or TypeError
-         * \pre args.size() == 2
-         */
-        Object set_child(const std::string& name, const Arguments& args);
-
-        /**
-         * \brief Calls a child function
-         * \throws MemberNotFound
-         */
-        Object call_method(const std::string& name, const Arguments& args);
-
-        /**
-         * \brief Converts to an object of a different type
-         */
-        Object converted(const Object& owner, const std::type_info& type) const;
-
-        void iterate(const Object& owner, const IteratorCallback& callback);
-
     private:
         const TypeWrapper* _type;
     };
@@ -213,47 +182,31 @@ public:
      * \brief Returns a direct attribute
      * \throw MemberNotFound
      */
-    Object get(const std::string& name) const
-    {
-        return value->get_child(*this, name);
-    }
+    Object get(const std::string& name) const;
 
     /**
      * \brief Sets a direct attribute
      * \throw MemberNotFound or TypeError
      */
-    Object set(const std::string& name, const Object& new_value) const
-    {
-        return value->set_child(name, {*this, new_value});
-    }
+    Object set(const std::string& name, const Object& new_value) const;
 
     /**
      * \brief Invokes a member function
      * \throws MemberNotFound or TypeError
      */
-    Object call(const std::string& method, Arguments args) const
-    {
-        args.insert(args.begin(), *this);
-        return value->call_method(method, args);
-    }
+    Object call(const std::string& method, Arguments args) const;
 
     /**
      * \brief Returns a string representing the contained object
      */
-    std::string to_string() const
-    {
-        return value->to_string(*this);
-    }
+    std::string to_string() const;
 
     /**
      * \brief Calls func with each element (for list-like objects)
      * \param Functor functor taking an Object as argument
      */
     template<class Functor>
-    void iterate(Functor&& func) const
-    {
-        return value->iterate(*this, std::forward<Functor>(func));
-    }
+    void iterate(Functor&& func) const;
 
     /**
      * \brief Cast to a reference of the contained type
@@ -317,7 +270,7 @@ private:
         {
             if ( begin >= end )
                 return *this;
-            return value->get_child(*this, *begin).get(begin+1, end);
+            return get(*begin).get(begin+1, end);
         }
 
     std::shared_ptr<wrapper::ValueWrapper> value;
@@ -334,67 +287,6 @@ Ref<T> wrap_reference(T& reference)
 
 struct CopyPolicy{};
 struct WrapReferencePolicy{};
-
-/**
- * \brief Object used to store values, by default stores a copy or a pointer
- *
- * Specialize if a different behaviour is required
- */
-template<class T, bool NoByValue = std::is_abstract<T>::value>
-    struct ValueHolder
-{
-    ValueHolder(const T& value)
-        : holder(value)
-    {}
-
-    ValueHolder(T* pointer)
-        : holder(pointer)
-    {}
-
-    ValueHolder(const Ref<T>& reference)
-        : holder(&reference.get())
-    {}
-
-    const T& get() const
-    {
-        if ( holder.which() == 0 )
-            return melanolib::get<T>(holder);
-        return *melanolib::get<T*>(holder);
-    }
-
-    T& get()
-    {
-        if ( holder.which() == 0 )
-            return melanolib::get<T>(holder);
-        return *melanolib::get<T*>(holder);;
-    }
-
-    melanolib::Variant<T, T*> holder;
-};
-
-template<class T>
-    struct ValueHolder<T, true>
-{
-    ValueHolder(T* pointer)
-        : holder(pointer)
-    {}
-
-    ValueHolder(const Ref<T>& reference)
-        : holder(&reference.get())
-    {}
-
-    const T& get() const
-    {
-        return *holder;
-    }
-
-    T& get()
-    {
-        return *holder;
-    }
-
-    T* holder;
-};
 
 namespace wrapper {
 
@@ -414,7 +306,7 @@ namespace wrapper {
                   types({std::type_index(typeid(std::remove_pointer_t<Args>))...})
             {}
 
-            bool can_call(const Object::Arguments& args) const
+            bool can_call(const Arguments& args) const
             {
                 if ( args.size() < types.size() )
                     return false;
@@ -438,7 +330,7 @@ namespace wrapper {
             /**
              * \pre can_call(args)
              */
-            Object operator()(const TypeWrapper* type, const Object::Arguments& args) const
+            Object operator()(const TypeWrapper* type, const Arguments& args) const
             {
                 if ( args.size() != types.size() && args.size() != types.size() + can_skip )
                     throw TypeError("Wrong number of arguments");
@@ -458,7 +350,7 @@ namespace wrapper {
                 : functor(std::forward<Args>(functor)...)
             {}
 
-            Object operator()(const TypeWrapper* type, const Object::Arguments& args) const
+            Object operator()(const TypeWrapper* type, const Arguments& args) const
             {
                 if ( args.size() < minargs || args.size() > maxargs )
                     throw TypeError("Wrong number of arguments");
@@ -494,13 +386,13 @@ namespace wrapper {
                 const TypeWrapper* type,
                 const Object& arg) const
             {
-                return call_and_bind(type, Object::Arguments(1, arg));
+                return call_and_bind(type, Arguments(1, arg));
             }
 
             /**
              * \brief Invokes the wrapped function and returns the un-wrapped value
              */
-            decltype(auto) raw_call(const Object::Arguments& args) const
+            decltype(auto) raw_call(const Arguments& args) const
             {
                 return invoke<Args...>(args, std::make_index_sequence<sizeof...(Args)>{}, this);
             }
@@ -511,7 +403,7 @@ namespace wrapper {
              */
             template<class... Args2, std::size_t... Indices>
             auto invoke(
-                const Object::Arguments& args,
+                const Arguments& args,
                 std::index_sequence<Indices...> seq,
                 const FunctorWrapper*
             ) const
@@ -528,7 +420,7 @@ namespace wrapper {
              */
             template<class... Args2, std::size_t... Indices>
             decltype(auto) invoke(
-                const Object::Arguments& args,
+                const Arguments& args,
                 std::index_sequence<Indices...>,
                 const void*
             ) const
@@ -536,8 +428,7 @@ namespace wrapper {
                 return functor;
             }
 
-            Object call_and_bind(const TypeWrapper* type,
-                                 const Object::Arguments& args) const;
+            Object call_and_bind(const TypeWrapper* type, const Arguments& args) const;
         };
 
         using Method = Overloadable<1>;
@@ -680,6 +571,18 @@ namespace wrapper {
 
         virtual ~TypeWrapper(){}
 
+
+        /**
+         * \brief Typeinfo object for the wrapped type
+         */
+        virtual std::unique_ptr<TypeWrapper> clone() const = 0;
+
+        /**
+         * \brief Creates a copy pf the run-time type
+         */
+        virtual std::type_index type_index() const noexcept = 0;
+
+// Accessors
         /**
          * \brief Type name (as specified when the type has been registered)
          */
@@ -687,11 +590,6 @@ namespace wrapper {
         {
             return _name;
         }
-
-        /**
-         * \brief Typeinfo object for the wrapped type
-         */
-        virtual std::type_index type_index() const noexcept = 0;
 
         const TypeSystem& type_system() const
         {
@@ -706,10 +604,23 @@ namespace wrapper {
             _name = name;
         }
 
+// Work in progress inheritance
+#if 0
         /**
-         * \brief Creates a copy pf the run-time type
+         * \brief Exposes inheritance
+         * \tparam T Type registered on the same type system
          */
-        virtual std::unique_ptr<TypeWrapper> clone() const = 0;
+        template<class T>
+        TypeWrapper& inherit()
+        {
+            supertypes.push_back(&type_system().template wrapper_for<T>());
+            return *this;
+        }
+
+        TypeWrapper& inherit(const std::string& type_name)
+        {
+            supertypes.push_back(&type_system().wrapper_for(type_name));
+        }
 
         /**
          * \brief Searches the inheritance tree (Breadth-first)
@@ -729,7 +640,257 @@ namespace wrapper {
             }
             return false;
         }
+#endif
+// Operation definitions
+        /**
+         * \brief Exposes an attribute
+         * \tparam T can be:
+         * * Any callable that can be invoked with an optional pointer or
+         *   reference to the held type
+         * * Any other object of a type registered to the parent namespace
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object, you'll need
+         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
+         */
+        template<class T, class ReturnPolicy = CopyPolicy>
+            TypeWrapper& add_readonly(const std::string& name, const T& value, ReturnPolicy = {})
+            {
+                getters[name] = detail::wrap_functor<ReturnPolicy>(value);
+                return *this;
+            }
 
+        /**
+         * \brief Sets a fallback functions used to get additional unregistered
+         *        attributes
+         * \tparam T can be:
+         * * Any callable that can be invoked with an optional pointer or
+         *   reference to the held type and a string
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the returned value
+         */
+        template<class T, class ReturnPolicy = CopyPolicy>
+            TypeWrapper& fallback_getter(const T& functor, ReturnPolicy = {})
+            {
+                _fallback_getter = detail::wrap_functor<ReturnPolicy>(functor);
+                return *this;
+            }
+
+        /**
+         * \brief Exposes an attribute
+         * \tparam Read can be:
+         * * Any callable that can be invoked with an optional pointer or
+         *   reference to the held type
+         * * Any other object of a type registered to the parent namespace
+         * \tparam Write can be:
+         * * Any callable that can be invoked with an optional pointer or
+         *   reference to the held type and an argument of any type registered
+         *   to the typesystem
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object,
+         * you'll need to ensure \p value has a type wrapped in Ref
+         * (eg: by calling wrap_reference)
+         */
+        template<class Read, class Write, class ReturnPolicy = CopyPolicy>
+            TypeWrapper& add_readwrite(
+                const std::string& name,
+                const Read& read,
+                const Write& write,
+                ReturnPolicy = {})
+        {
+            getters[name] = detail::wrap_functor<ReturnPolicy>(read);
+            setters[name] = detail::wrap_setter<ReturnPolicy>(write);
+            return *this;
+        }
+        /**
+         * \brief Exposes an attribute
+         * \tparam T must be a pointer to a data member
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the returned value
+         */
+        template<class T>
+            TypeWrapper& add_readwrite(const std::string& name, const T& value,
+                                        CopyPolicy = {})
+            {
+                return add_readwrite(name, value, value, CopyPolicy{});
+            }
+
+        template<class T>
+            TypeWrapper& add_readwrite(const std::string& name, const T& value,
+                                       WrapReferencePolicy)
+            {
+                return add_readwrite(name, value, value, WrapReferencePolicy{});
+            }
+
+        /**
+         * \brief Sets a fallback function used to set additional unregistered attributes
+         * \tparam T can be:
+         * * Any callable that can be invoked with an optional reference or
+         *   pointer to the held type, a string, and an additional argument
+         */
+        template<class T>
+            TypeWrapper& fallback_setter(const T& functor)
+        {
+            _fallback_setter = detail::wrap_functor<CopyPolicy>(functor);
+            return *this;
+        }
+
+        /**
+         * \brief Exposes a member function
+         * \tparam T can be:
+         * * Any callable, if it takes as first argument a a reference or
+         *   pointer to the held type, the current object will be passed
+         * * Any other object of a type registered to the parent namespace
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object, you'll need
+         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
+         */
+        template<class T, class ReturnPolicy = CopyPolicy>
+            TypeWrapper& add_method(const std::string& name, const T& value,
+                                     ReturnPolicy = {})
+        {
+            methods.insert({
+                name,
+                detail::wrap_method<ReturnPolicy>(value)
+            });
+            return *this;
+        }
+
+        /**
+         * \brief Sets the function used as a constructor
+         * \tparam T can be:
+         * * Any callable object returning an object, pointer or reference of the held type
+         * * An object of the held type
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object, you'll need
+         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
+         */
+        template<class T, class ReturnPolicy = CopyPolicy>
+            TypeWrapper& constructor(const T& functor, ReturnPolicy = {})
+            {
+                _constructors.push_back(detail::wrap_ctor<ReturnPolicy>(functor));
+                return *this;
+            }
+
+        /**
+         * \brief Exposes a constructor
+         * \tparam Args constructor arguments
+         * \todo Make more user friendly (ie: don't require repeating HeldType
+         */
+        template<class HeldType, class... Args>
+            TypeWrapper& constructor()
+            {
+                _constructors.push_back(detail::wrap_raw_ctor<HeldType, Args...>());
+                return *this;
+            }
+
+        /**
+         * \brief Exposes a conversion operator
+         * \tparam Target The type this conversion converts to
+         * \tparam Functor can be:
+         * * Any callable that can be invoked with an optional pointer or
+         *   reference to the held type that returns a value convertible (in C++)
+         *   to \p Target
+         * * Any other object of a type registered to the parent namespace
+         *   convertible (in C++) to \p Target
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the returned value
+         * \note If you want to wrap a reference to an external object, you'll need
+         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
+         */
+        template<class Target, class Functor, class ReturnPolicy = CopyPolicy>
+            TypeWrapper& conversion(const Functor& functor, ReturnPolicy = {})
+        {
+            converters[typeid(Target)] = detail::wrap_functor<ReturnPolicy>(functor);
+            return *this;
+        }
+
+        /**
+         * \brief Exposes a conversion operator
+         *
+         * The target type is deduced from the result of a call to \p Functor
+         */
+        template<class Functor, class ReturnPolicy = CopyPolicy>
+            TypeWrapper& conversion(const Functor& functor, ReturnPolicy = {})
+        {
+            auto getter = detail::wrap_functor<ReturnPolicy>(functor);
+            using GetterType = decltype(getter);
+            using Target = std::decay_t<typename GetterType::return_type>;
+            converters[typeid(Target)] = std::move(getter);
+            return *this;
+        }
+
+
+
+        /**
+         * \brief Exposes a function to be used for to_string
+         * \tparam Functor can be:
+         * * A pointer to a data member of HeldType
+         * * A pointer to a member function of HeldType taking no arguments
+         * * Any function object taking a const HeldType& argument
+         */
+        template<class Functor>
+            TypeWrapper& string_conversion(const Functor& functor)
+            {
+                stringizer = [
+                    wrapper=detail::wrap_functor<CopyPolicy>(functor)
+                ](const Object& obj) -> std::string
+                {
+                    return wrapper.raw_call(Object::Arguments(1, obj));
+                };
+                return *this;
+            }
+
+        /**
+         * \brief Makes a type iterable by using two functor
+         * \tparam Begin An object invokable with a reference to HeldType
+         * \tparam End An object invokable with a reference to HeldType
+         * \tparam Filter A functor invokable with the result of a dereferenced iterator
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the values returned by \p filter
+         */
+        template<class Begin, class End, class Filter = Identity, class ReturnPolicy = CopyPolicy>
+            TypeWrapper& make_iterable(
+                const Begin& begin,
+                const End& end,
+                const Filter& filter = {},
+                ReturnPolicy = {})
+        {
+            iterator = [
+                begin = detail::wrap_functor<CopyPolicy>(begin),
+                end = detail::wrap_functor<CopyPolicy>(end),
+                filter
+            ](
+                const TypeWrapper* type,
+                const Object& value,
+                const std::function<void (const Object&)>& callback )
+            {
+                auto iter = begin.raw_call(Object::Arguments(1, value));
+                auto enditer = end.raw_call(Object::Arguments(1, value));
+                for ( ; iter != enditer; ++iter )
+                {
+                    callback(type->foreign(filter(*iter), ReturnPolicy{}));
+                }
+            };
+            return *this;
+        }
+
+        /**
+         * \brief Makes a type iterable by using std::begin and std::end
+         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
+         *                      how to bind the values dereferenced from the iterators
+         */
+        template<class ReturnPolicy = CopyPolicy>
+            TypeWrapper& make_iterable(ReturnPolicy = {})
+        {
+            make_iterable_default(ReturnPolicy{});
+            return *this;
+        }
+
+// Runtime object access
         /**
          * \brief Returns an attribute of the passed object
          * \throws MemberNotFound if \p name is not something registered
@@ -821,17 +982,13 @@ namespace wrapper {
             iterator(this, owner, callback);
         }
 
-        /// \todo make private
+    private:
         template<class T, class Policy = CopyPolicy>
         Object foreign(T&& obj, Policy = {}) const;
-        
-    protected:
-        void inherit(const TypeWrapper& parent)
-        {
-            supertypes.push_back(&parent);
-        }
 
-    private:
+        virtual detail::Stringizer default_stringizer() const = 0;
+        virtual void make_iterable_default(CopyPolicy) = 0;
+        virtual void make_iterable_default(WrapReferencePolicy) = 0;
 
         /**
          * \brief Moves to a different namespace
@@ -916,278 +1073,11 @@ namespace wrapper {
         ClassWrapper(std::string name, const TypeSystem& type_system)
             : TypeWrapper(std::move(name), type_system)
         {
-            stringizer = [](const Object& obj){
-                return detail::value_to_string(obj.cast<HeldType>(), obj.type());
-            };
+            stringizer = default_stringizer();
         }
 
-        /**
-         * \brief Exposes an attribute
-         * \tparam T can be:
-         * * Any callable that can be invoked with an optional pointer or reference to HeldType
-         * * Any other object of a type registered to the parent namespace
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the returned value
-         * \note If you want to wrap a reference to an external object, you'll need
-         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
-         */
-        template<class T, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& add_readonly(const std::string& name, const T& value, ReturnPolicy = {})
-            {
-                getters[name] = detail::wrap_functor<ReturnPolicy>(value);
-                return *this;
-            }
 
-
-        /**
-         * \brief Sets a fallback functions used to get additional unregistered
-         *        attributes
-         * \tparam T can be:
-         * * Any callable that can be invoked with an optional pointer or
-         *   reference to HeldType and a string
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the returned value
-         */
-        template<class T, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& fallback_getter(const T& functor, ReturnPolicy = {})
-            {
-                _fallback_getter = detail::wrap_functor<ReturnPolicy>(functor);
-                return *this;
-            }
-
-        /**
-         * \brief Exposes an attribute
-         * \tparam Read can be:
-         * * Any callable that can be invoked with an optional pointer or reference to HeldType
-         * * Any other object of a type registered to the parent namespace
-         * \tparam Write can be:
-         * * Any callable that can be invoked with an optional pointer or
-         *   reference to HeldType and an argument of any type registered to the typesystem
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the returned value
-         * \note If you want to wrap a reference to an external object, you'll need
-         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
-         */
-        template<class Read, class Write, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& add_readwrite(
-                const std::string& name,
-                const Read& read,
-                const Write& write,
-                ReturnPolicy = {})
-        {
-            getters[name] = detail::wrap_functor<ReturnPolicy>(read);
-            setters.insert({
-                name,
-                detail::wrap_setter<ReturnPolicy>(write)
-            });
-            return *this;
-        }
-
-        /**
-         * \brief Exposes an attribute
-         * \tparam T must be a pointer to a data member
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the returned value
-         */
-        template<class T>
-            ClassWrapper& add_readwrite(const std::string& name, const T& value,
-                                        CopyPolicy = {})
-            {
-                return add_readwrite(name, value, value, CopyPolicy{});
-            }
-
-        template<class T>
-            ClassWrapper& add_readwrite(const std::string& name, const T& value,
-                                        WrapReferencePolicy)
-            {
-                return add_readwrite(name, value, value, WrapReferencePolicy{});
-            }
-
-        /**
-         * \brief Sets a fallback function used to set additional unregistered attributes
-         * \tparam T can be:
-         * * Any callable that can be invoked with an optional reference or
-         *   pointer to HeldType, a string, and an additional argument
-         */
-        template<class T>
-            ClassWrapper& fallback_setter(const T& functor)
-        {
-            _fallback_setter = detail::wrap_functor<CopyPolicy>(functor);
-            return *this;
-        }
-
-        /**
-         * \brief Exposes a member function
-         * \tparam T can be:
-         * * Any callable, if it takes as first argument a a reference or
-         *   pointer to HeldType, the current object will be passed
-         * * Any other object of a type registered to the parent namespace
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the returned value
-         * \note If you want to wrap a reference to an external object, you'll need
-         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
-         */
-        template<class T, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& add_method(const std::string& name, const T& value,
-                                     ReturnPolicy = {})
-        {
-            methods.insert({
-                name,
-                detail::wrap_method<ReturnPolicy>(value)
-            });
-            return *this;
-        }
-
-        /**
-         * \brief Sets the function used as a constructor
-         * \tparam T can be:
-         * * Any callable object returning an object, pointer or reference of HeldType
-         * * An object of type HeldType
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the returned value
-         * \note If you want to wrap a reference to an external object, you'll need
-         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
-         */
-        template<class T, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& constructor(const T& functor, ReturnPolicy = {})
-            {
-                _constructors.push_back(detail::wrap_ctor<ReturnPolicy>(functor));
-                return *this;
-            }
-
-        /**
-         * \brief Exposes a constructor
-         * \tparam Args constructor arguments
-         */
-        template<class... Args>
-            ClassWrapper& constructor()
-            {
-                _constructors.push_back(detail::wrap_raw_ctor<HeldType, Args...>());
-                return *this;
-            }
-
-        /**
-         * \brief Exposes a conversion operator
-         * \tparam Target The type this conversion converts to
-         * \tparam Functor can be:
-         * * Any callable that can be invoked with an optional pointer or
-         *   reference to HeldType that returns a value convertible (in C++)
-         *   to \p Target
-         * * Any other object of a type registered to the parent namespace
-         *   convertible (in C++) to \p Target
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the returned value
-         * \note If you want to wrap a reference to an external object, you'll need
-         * to ensure \p value has a type wrapped in Ref (eg: by calling wrap_reference)
-         */
-        template<class Target, class Functor, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {})
-        {
-            converters[typeid(Target)] = detail::wrap_functor<ReturnPolicy>(functor);
-            return *this;
-        }
-
-        /**
-         * \brief Exposes a conversion operator
-         *
-         * The target type is deduced from the result of a call to \p Functor
-         */
-        template<class Functor, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& conversion(const Functor& functor, ReturnPolicy = {})
-        {
-            auto getter = detail::wrap_functor<ReturnPolicy>(functor);
-            using GetterType = decltype(getter);
-            using Target = std::decay_t<typename GetterType::return_type>;
-            converters[typeid(Target)] = std::move(getter);
-            return *this;
-        }
-
-        /**
-         * \brief Exposes a function to be used for to_string
-         * \tparam Functor can be:
-         * * A pointer to a data member of HeldType
-         * * A pointer to a member function of HeldType taking no arguments
-         * * Any function object taking a const HeldType& argument
-         */
-        template<class Functor>
-            ClassWrapper& string_conversion(const Functor& functor)
-            {
-                stringizer = [
-                    wrapper=detail::wrap_functor<CopyPolicy>(functor)
-                ](const Object& obj) -> std::string
-                {
-                    return wrapper.raw_call(Object::Arguments(1, obj));
-                };
-                return *this;
-            }
-
-        /**
-         * \brief Makes a type iterable by using two functor
-         * \tparam Begin An object invokable with a reference to HeldType
-         * \tparam End An object invokable with a reference to HeldType
-         * \tparam Filter A functor invokable with the result of a dereferenced iterator
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the values returned by \p filter
-         */
-        template<class Begin, class End, class Filter = Identity, class ReturnPolicy = CopyPolicy>
-            ClassWrapper& make_iterable(
-                const Begin& begin,
-                const End& end,
-                const Filter& filter = {},
-                ReturnPolicy = {})
-        {
-            iterator = [
-                begin = detail::wrap_functor<CopyPolicy>(begin),
-                end = detail::wrap_functor<CopyPolicy>(end),
-                filter
-            ](
-                const TypeWrapper* type,
-                const Object& value,
-                const std::function<void (const Object&)>& callback )
-            {
-                auto iter = begin.raw_call(Object::Arguments(1, value));
-                auto enditer = end.raw_call(Object::Arguments(1, value));
-                for ( ; iter != enditer; ++iter )
-                {
-                    callback(type->foreign(filter(*iter), ReturnPolicy{}));
-                }
-            };
-            return *this;
-        }
-
-        /**
-         * \brief Makes a type iterable by using std::begin and std::end
-         * \tparam ReturnPolicy CopyPolicy or WrapReferencePolicy, to determine
-         *                      how to bind the values dereferenced from the iterators
-         */
-        template<class ReturnPolicy = CopyPolicy>
-            ClassWrapper& make_iterable(ReturnPolicy = {})
-        {
-            return make_iterable(
-                Begin<HeldType>{},
-                End<HeldType>{},
-                Identity{},
-                ReturnPolicy{}
-            );
-        }
-
-        /**
-         * \brief Exposes inheritance
-         * \tparam T Type registered on the same type system
-         */
-        template<class T>
-        ClassWrapper& inherit()
-        {
-            TypeWrapper::inherit(type_system().template wrapper_for<T>());
-            return *this;
-        }
-
-        ClassWrapper& inherit(const std::string& type_name)
-        {
-            TypeWrapper::inherit(type_system().wrapper_for(type_name));
-        }
-
-        std::type_index type_index() const noexcept override
+        std::type_index type_index() const noexcept final
         {
             return typeid(HeldType);
         }
@@ -1196,24 +1086,121 @@ namespace wrapper {
         {
             return std::make_unique<ClassWrapper>(*this);
         }
+
+    private:
+        detail::Stringizer default_stringizer() const final
+        {
+            return [](const Object& obj){
+                return detail::value_to_string(obj.cast<HeldType>(), obj.type());
+            };
+        }
+
+        void make_iterable_default(CopyPolicy) final
+        {
+            make_iterable_impl<Class, CopyPolicy>(this);
+        }
+
+        void make_iterable_default(WrapReferencePolicy) final
+        {
+            make_iterable_impl<Class, WrapReferencePolicy>(this);
+        }
+
+        template<class H, class Policy>
+        auto make_iterable_impl(ClassWrapper*)
+        -> DummyType<void, Policy, decltype(std::begin(std::declval<H>()))>
+        {
+            make_iterable(
+                Begin<H>{},
+                End<H>{},
+                Identity{},
+                Policy{}
+            );
+        }
+
+        template<class H, class Policy>
+        void make_iterable_impl(void*)
+        {
+        }
     };
 
 } // namespace wrapper
 
+
+/**
+ * \brief Object used to store values, by default stores a copy or a pointer
+ *
+ * Specialize if a different behaviour is required
+ */
+template<class T, bool NoByValue = std::is_abstract<T>::value>
+    struct ValueHolder
+{
+    ValueHolder(const T& value)
+        : holder(value)
+    {}
+
+    ValueHolder(T* pointer)
+        : holder(pointer)
+    {}
+
+    ValueHolder(const Ref<T>& reference)
+        : holder(&reference.get())
+    {}
+
+    const T& get() const
+    {
+        if ( holder.which() == 0 )
+            return melanolib::get<T>(holder);
+        return *melanolib::get<T*>(holder);
+    }
+
+    T& get()
+    {
+        if ( holder.which() == 0 )
+            return melanolib::get<T>(holder);
+        return *melanolib::get<T*>(holder);;
+    }
+
+    melanolib::Variant<T, T*> holder;
+};
+
+template<class T>
+    struct ValueHolder<T, true>
+{
+    ValueHolder(T* pointer)
+        : holder(pointer)
+    {}
+
+    ValueHolder(const Ref<T>& reference)
+        : holder(&reference.get())
+    {}
+
+    const T& get() const
+    {
+        return *holder;
+    }
+
+    T& get()
+    {
+        return *holder;
+    }
+
+    T* holder;
+};
+
 namespace wrapper {
 
     /**
-     * \brief ValueWrapper associated with a ClassWrapper
+     * \brief An erased ValueWrapper
      */
     template<class Class>
     class ObjectWrapper : public ValueWrapper
     {
     public:
-        explicit ObjectWrapper(const Class& value, const ClassWrapper<Class>* type)
+        explicit ObjectWrapper(const Class& value, const TypeWrapper* type)
             : ValueWrapper(type), value(value)
         {}
 
-        explicit ObjectWrapper(const Ref<Class>& reference, const ClassWrapper<Class>* type)
+        explicit ObjectWrapper(const Ref<Class>& reference, const TypeWrapper* type)
             : ValueWrapper(type), value(reference)
         {}
 
@@ -1231,38 +1218,57 @@ namespace wrapper {
     };
 
 
-    inline Object ValueWrapper::get_child(const Object& owner, const std::string& name) const
-    {
-        return type().get_value(owner, name);
-    }
-
-    inline Object ValueWrapper::set_child(const std::string& name, const Object::Arguments& args)
-    {
-        return type().set_value(name, args);
-    }
-
-    inline Object ValueWrapper::call_method(const std::string& name, const Object::Arguments& args)
-    {
-        return type().call_method(name, args);
-    }
-
-    inline Object ValueWrapper::converted(const Object& owner, const std::type_info& type_info) const
-    {
-        return type().convert(owner, type_info);
-    }
-
-    inline std::string ValueWrapper::to_string(const Object& owner) const
-    {
-        return type().to_string(owner);
-    }
-
-    inline void ValueWrapper::iterate(const Object& owner, const IteratorCallback& callback)
-    {
-        type().iterate(owner, callback);
-    }
-
-
 } // namespace wrapper
+
+
+inline Object Object::get(const std::string& name) const
+{
+    return value->type().get_value(*this, name);
+}
+
+
+inline Object Object::set(const std::string& name, const Object& new_value) const
+{
+    return value->type().set_value(name, {*this, new_value});
+}
+
+inline Object Object::call(const std::string& method, Arguments args) const
+{
+    args.insert(args.begin(), *this);
+    return value->type().call_method(method, args);
+}
+
+inline std::string Object::to_string() const
+{
+    return value->type().to_string(*this);
+}
+
+template<class Functor>
+void Object::iterate(Functor&& func) const
+{
+    return value->type().iterate(*this, std::forward<Functor>(func));
+}
+
+template<class T>
+Object Object::converted() const
+{
+    using Type = std::decay_t<T>;
+    if ( has_type<T>() )
+        return *this;
+    return value->type().convert(*this, typeid(Type));
+}
+
+template<>
+inline Object Object::converted<Object>() const
+{
+    return *this;
+}
+
+template<>
+inline Object Object::converted<const Object&>() const
+{
+    return *this;
+}
 
 /**
  * \brief Template used to register typesm
@@ -1565,7 +1571,7 @@ private:
             throw TypeError("Unregistered type");
         return Object(std::make_shared<wrapper::ObjectWrapper<Class>>(
             std::forward<Ctor>(ctor_arg),
-            static_cast<wrapper::ClassWrapper<Class>*>(iter->second.get())
+            iter->second.get()
         ));
     }
 
@@ -1721,27 +1727,6 @@ inline bool Object::has_type<Object>() const
     return true;
 }
 
-
-template<class T>
-Object Object::converted() const
-{
-    using Type = std::decay_t<T>;
-    if ( has_type<T>() )
-        return *this;
-    return value->converted(*this, typeid(Type));
-}
-
-template<>
-inline Object Object::converted<Object>() const
-{
-    return *this;
-}
-
-template<>
-inline Object Object::converted<const Object&>() const
-{
-    return *this;
-}
 
 inline bool Object::has_type(const std::type_index& id) const
 {

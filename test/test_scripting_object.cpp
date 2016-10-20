@@ -563,7 +563,7 @@ BOOST_AUTO_TEST_CASE( test_constructor_raw )
     TypeSystem ns;
     ns.register_type<Constructible>("Constructible")
         .add_readonly("data", &Constructible::data)
-        .constructor<std::string>()
+        .constructor<Constructible, std::string>()
     ;
     ns.register_type<std::string>();
     ns.register_type<int>();
